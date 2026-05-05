@@ -57,6 +57,8 @@ builder.Services.AddSingleton<IProjectGitService, ProjectGitService>();
 builder.Services.AddSingleton<IFilesystemService, FilesystemService>();
 builder.Services.AddSingleton<IClaudeJobService, ClaudeJobService>();
 builder.Services.AddSingleton<IRepoAnalysisService, RepoAnalysisService>();
+builder.Services.AddSingleton<IPlanService, PlanService>();
+builder.Services.AddSingleton<IStepReviewService, StepReviewService>();
 
 builder.WebHost.ConfigureKestrel(options =>
 {

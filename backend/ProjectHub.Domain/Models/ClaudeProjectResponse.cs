@@ -8,8 +8,12 @@ public sealed record ClaudeProjectResponse(
     string Name,
     string WorkingDirectory,
     DateTimeOffset CreatedAt,
-    Guid ClientId)
+    Guid ClientId,
+    Guid? RepoId,
+    string? Description,
+    Guid? TicketId)
 {
     public static ClaudeProjectResponse FromProject(ClaudeProject project)
-        => new(project.Id, project.Name, project.WorkingDirectory, project.CreatedAt, project.ClientId);
+        => new(project.Id, project.Name, project.WorkingDirectory, project.CreatedAt,
+               project.ClientId, project.RepoId, project.Description, project.TicketId);
 }

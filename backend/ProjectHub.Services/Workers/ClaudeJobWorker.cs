@@ -129,13 +129,58 @@ public sealed class ClaudeJobWorker(
 
         await dataProvider.UpdateJobAsync(job, cancellationToken);
 
+        await HandlePlanLifecycleAsync(job, cancellationToken);
+
         logger.LogInformation(
-            "Finished {Kind} job {JobId} with status {Status} in {DurationMs}ms; {FileCount} file(s) changed",
+            "Finished {Kind} job {JobId} (intent {Intent}) with status {Status} in {DurationMs}ms; {FileCount} file(s) changed",
             job.Kind,
             jobId,
+            job.Intent,
             job.Status,
             job.DurationMs,
             job.FilesChanged.Count);
+    }
+
+    private async Task HandlePlanLifecycleAsync(ClaudeJob job, CancellationToken cancellationToken)
+    {
+        switch (job.Intent)
+        {
+            case JobIntent.PlanVerification when job.PlanId is { } planId:
+                if (job.Status == JobStatus.Completed && !string.IsNullOrEmpty(job.Response))
+                {
+                    await dataProvider.RecordPlanVerificationAsync(planId, job.Response, cancellationToken);
+                    logger.LogInformation("Recorded plan verification on plan {PlanId} from job {JobId}", planId, job.Id);
+                }
+                break;
+
+            case JobIntent.PlanStep when job.PlanStepId is { } stepId:
+                if (job.Status == JobStatus.Completed)
+                {
+                    var review = await dataProvider.CreateStepReviewAsync(
+                        job.ProjectId,
+                        stepId,
+                        job.Id,
+                        job.FilesChanged,
+                        cancellationToken);
+                    await dataProvider.UpdatePlanStepStatusAsync(
+                        stepId,
+                        PlanStepStatus.AwaitingReview,
+                        completedAt: DateTimeOffset.UtcNow,
+                        cancellationToken: cancellationToken);
+                    logger.LogInformation(
+                        "Created step review {ReviewId} with {FileCount} file(s) for step {StepId}",
+                        review.Id, job.FilesChanged.Count, stepId);
+                }
+                else
+                {
+                    await dataProvider.UpdatePlanStepStatusAsync(
+                        stepId,
+                        PlanStepStatus.Failed,
+                        completedAt: DateTimeOffset.UtcNow,
+                        cancellationToken: cancellationToken);
+                }
+                break;
+        }
     }
 
     private async Task<PromptContext> BuildPromptContextAsync(ClaudeProject project, CancellationToken cancellationToken)

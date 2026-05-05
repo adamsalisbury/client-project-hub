@@ -1,109 +1,123 @@
 /**
- * Translates the current URL into project + tab state and back.
+ * URL ↔ active workspace tab.
+ *
+ * The workspace shell keeps its full open-tab list in localStorage; only the
+ * *active* tab is reflected in the URL so browser back/forward navigates
+ * between tabs.
  *
  * Routes:
- *   /                              homepage
- *   /project/:id                   project view, info tab
- *   /project/:id/info              info
- *   /project/:id/files             files
- *   /project/:id/agents            agents
- *   /project/:id/chat              chat
- *   /project/:id/memory-tweak      memory tweaking
- *   /project/:id/file/<path>       file detail (path may contain slashes)
- *   /project/:id/diff/<path>       diff
- *   /project/:id/ticket/<tid>      ticket
- *   /project/:id/agent/<aid>       single agent
- *   /project/:id/knowledge/<kid>           project knowledge
- *   /project/:id/client-knowledge/<kid>    client knowledge (with clientId in query)
- *   /project/:id/diagnostics/<jobId>       diagnostics for a specific message
+ *   /                                   home
+ *   /c/<clientId>                       client tab
+ *   /p/<projectId>                      project hub tab
+ *   /p/<projectId>/<subKind>            permanent sub (info|files|chat|agents|plan|memory-tweak)
+ *   /p/<projectId>/file/<path>          file viewer sub
+ *   /p/<projectId>/diff/<path>          diff sub
+ *   /p/<projectId>/ticket/<tid>         ticket sub
+ *   /p/<projectId>/agent/<aid>          agent sub
+ *   /p/<projectId>/knowledge/<kid>      project-knowledge sub
+ *   /p/<projectId>/client-knowledge/<kid>?client=<cid>   client-knowledge sub
+ *   /p/<projectId>/diagnostics/<jobId>  diagnostics sub
+ *   /p/<projectId>/step-review/<rid>    step-review sub
+ *
+ * Legacy `/project/<id>/...` URLs still parse (mapped to the same shapes).
  */
 
-export const PERMANENT_KINDS = new Set(['info', 'files', 'agents', 'chat', 'memory-tweak']);
+const PERMANENT_SUB_KINDS = new Set(['info', 'files', 'chat', 'agents', 'plan', 'memory-tweak']);
 
 export function parseRoute(pathname, search) {
+    const params = new URLSearchParams(search || '');
+
     if (!pathname || pathname === '/') {
-        return { projectId: null, target: null };
+        return { kind: 'home' };
     }
 
-    const m = pathname.match(/^\/project\/([^/]+)(?:\/(.*?))?\/?$/);
+    let m = pathname.match(/^\/c\/([^/]+)\/?$/);
+    if (m) {
+        return { kind: 'client', clientId: m[1] };
+    }
+
+    m = pathname.match(/^\/(?:p|project)\/([^/]+)(?:\/(.*?))?\/?$/);
     if (!m) {
-        return { projectId: null, target: null };
+        return { kind: 'home' };
     }
 
     const projectId = m[1];
     const rest = (m[2] || '').replace(/^\/+|\/+$/g, '');
     if (!rest) {
-        return { projectId, target: { kind: 'info' } };
+        return { kind: 'project', projectId };
     }
 
     const segs = rest.split('/');
     const head = segs[0];
     const tail = segs.slice(1).join('/');
 
-    if (PERMANENT_KINDS.has(head)) {
-        return { projectId, target: { kind: head } };
+    if (PERMANENT_SUB_KINDS.has(head)) {
+        return { kind: 'sub', subKind: head, projectId };
     }
     if (head === 'file' && tail) {
-        return { projectId, target: { kind: 'file', path: decodeURIComponent(tail) } };
+        return { kind: 'sub', subKind: 'file', projectId, payload: { path: decodeURIComponent(tail) } };
     }
     if (head === 'diff' && tail) {
-        return { projectId, target: { kind: 'diff', path: decodeURIComponent(tail) } };
+        return { kind: 'sub', subKind: 'diff', projectId, payload: { path: decodeURIComponent(tail) } };
     }
     if (head === 'ticket' && tail) {
-        return { projectId, target: { kind: 'ticket', id: tail } };
+        return { kind: 'sub', subKind: 'ticket', projectId, payload: { id: tail } };
     }
     if (head === 'agent' && tail) {
-        return { projectId, target: { kind: 'agent', id: tail } };
+        return { kind: 'sub', subKind: 'agent', projectId, payload: { id: tail } };
     }
     if (head === 'knowledge' && tail) {
-        return { projectId, target: { kind: 'knowledge-project', id: tail } };
-    }
-    if (head === 'diagnostics' && tail) {
-        return { projectId, target: { kind: 'diagnostics', id: tail } };
+        return { kind: 'sub', subKind: 'knowledge-project', projectId, payload: { id: tail } };
     }
     if (head === 'client-knowledge' && tail) {
-        const params = new URLSearchParams(search || '');
-        return {
-            projectId,
-            target: {
-                kind: 'knowledge-client',
-                id: tail,
-                clientId: params.get('client') || null
-            }
-        };
+        return { kind: 'sub', subKind: 'knowledge-client', projectId, payload: { id: tail, clientId: params.get('client') || null } };
+    }
+    if (head === 'diagnostics' && tail) {
+        return { kind: 'sub', subKind: 'diagnostics', projectId, payload: { jobId: tail } };
+    }
+    if (head === 'step-review' && tail) {
+        return { kind: 'sub', subKind: 'step-review', projectId, payload: { reviewId: tail } };
     }
 
-    return { projectId, target: { kind: 'info' } };
+    return { kind: 'project', projectId };
 }
 
-export function buildPath(projectId, tab) {
-    if (!projectId) return '/';
-    const base = `/project/${projectId}`;
-    if (!tab) return `${base}/info`;
-    switch (tab.kind) {
-        case 'info':
-        case 'files':
-        case 'agents':
-        case 'chat':
-        case 'memory-tweak':
-            return `${base}/${tab.kind}`;
-        case 'file':
-            return `${base}/file/${encodePath(tab.payload?.path)}`;
-        case 'diff':
-            return `${base}/diff/${encodePath(tab.payload?.path)}`;
-        case 'ticket':
-            return `${base}/ticket/${tab.payload?.ticketId}`;
-        case 'agent':
-            return `${base}/agent/${tab.payload?.agentId}`;
-        case 'diagnostics':
-            return `${base}/diagnostics/${tab.payload?.jobId}`;
-        case 'knowledge-project':
-            return `${base}/knowledge/${tab.payload?.id}`;
-        case 'knowledge-client':
-            return `${base}/client-knowledge/${tab.payload?.id}?client=${encodeURIComponent(tab.payload?.clientId ?? '')}`;
-        default:
-            return `${base}/info`;
+export function buildPath(tab) {
+    if (!tab || tab.kind === 'home') return '/';
+    if (tab.kind === 'client') return `/c/${tab.payload.clientId}`;
+    if (tab.kind === 'project') return `/p/${tab.payload.projectId}`;
+    if (tab.kind === 'sub') {
+        const base = `/p/${tab.payload.projectId}`;
+        const sub = tab.payload.subKind;
+        switch (sub) {
+            case 'info':
+            case 'files':
+            case 'chat':
+            case 'agents':
+            case 'plan':
+            case 'memory-tweak':
+                return `${base}/${sub}`;
+            case 'file':
+                return `${base}/file/${encodePath(tab.payload.path)}`;
+            case 'diff':
+                return `${base}/diff/${encodePath(tab.payload.path)}`;
+            case 'ticket':
+                return `${base}/ticket/${tab.payload.id}`;
+            case 'agent':
+                return `${base}/agent/${tab.payload.id}`;
+            case 'diagnostics':
+                return `${base}/diagnostics/${tab.payload.jobId}`;
+            case 'knowledge-project':
+                return `${base}/knowledge/${tab.payload.id}`;
+            case 'knowledge-client':
+                return `${base}/client-knowledge/${tab.payload.id}?client=${encodeURIComponent(tab.payload.clientId ?? '')}`;
+            case 'step-review':
+                return `${base}/step-review/${tab.payload.reviewId}`;
+            default:
+                return base;
+        }
     }
+    return '/';
 }
 
 function encodePath(p) {

@@ -67,4 +67,37 @@ public sealed class ClientsController(
         await knowledge.DeleteClientKnowledgeAsync(clientId, id, cancellationToken);
         return NoContent();
     }
+
+    [HttpPut("{id:guid}/colour")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateColour(Guid id, [FromBody] SetClientColourRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var client = await clients.UpdateColourAsync(id, request.Colour, cancellationToken);
+        return Ok(ClientResponse.FromClient(client));
+    }
+
+    [HttpGet("{clientId:guid}/repos")]
+    public async Task<IActionResult> ListRepos(Guid clientId, CancellationToken cancellationToken)
+    {
+        var list = await clients.ListReposAsync(clientId, cancellationToken);
+        return Ok(list.Select(ClientRepoResponse.FromRepo).ToList());
+    }
+
+    [HttpPost("{clientId:guid}/repos")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AddRepo(Guid clientId, [FromBody] CreateClientRepoRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var repo = await clients.AddRepoAsync(clientId, request.Name, request.Path, cancellationToken);
+        return CreatedAtAction(nameof(ListRepos), new { clientId }, ClientRepoResponse.FromRepo(repo));
+    }
+
+    [HttpDelete("{clientId:guid}/repos/{repoId:guid}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RemoveRepo(Guid clientId, Guid repoId, CancellationToken cancellationToken)
+    {
+        await clients.RemoveRepoAsync(repoId, cancellationToken);
+        return NoContent();
+    }
 }

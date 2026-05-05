@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-export default function Homepage({ clients, projects, onPick, onNewClient, onNewProject }) {
+export default function Homepage({ clients, projects, onPickClient, onPickProject, onNewClient, onNewProject }) {
     const projectsByClient = useMemo(() => {
         const map = new Map();
         for (const project of projects) {
@@ -21,7 +21,7 @@ export default function Homepage({ clients, projects, onPick, onNewClient, onNew
             <div className="homepage-card">
                 <h1 className="homepage-title">Project Hub</h1>
                 <p className="homepage-tagline">
-                    Pick a project, or start something new.
+                    Pick a client or jump straight to a project.
                 </p>
 
                 <div className="homepage-actions">
@@ -55,10 +55,19 @@ export default function Homepage({ clients, projects, onPick, onNewClient, onNew
                     <ul className="client-list">
                         {orderedClients.map((c) => {
                             const list = projectsByClient.get(c.id) ?? [];
+                            const colour = c.colour || '#E2E8F0';
                             return (
-                                <li key={c.id} className="client-list-item">
+                                <li key={c.id} className="client-list-item" style={{ '--client-colour': colour }}>
                                     <div className="client-list-header">
-                                        <span className="client-list-name">{c.name}</span>
+                                        <button
+                                            type="button"
+                                            className="client-list-name client-list-open"
+                                            onClick={() => onPickClient(c.id)}
+                                            title="Open client tab"
+                                        >
+                                            <span className="client-list-swatch" style={{ background: colour }} />
+                                            {c.name}
+                                        </button>
                                         <span className="client-list-count">
                                             {list.length} {list.length === 1 ? 'project' : 'projects'}
                                         </span>
@@ -73,7 +82,7 @@ export default function Homepage({ clients, projects, onPick, onNewClient, onNew
                                                     <button
                                                         type="button"
                                                         className="client-project-item"
-                                                        onClick={() => onPick(p.id)}
+                                                        onClick={() => onPickProject(p.id)}
                                                         title={p.workingDirectory}
                                                     >
                                                         <span className="client-project-name">{p.name}</span>

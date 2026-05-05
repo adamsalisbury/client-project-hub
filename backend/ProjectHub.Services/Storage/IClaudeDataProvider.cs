@@ -50,7 +50,14 @@ public interface IClaudeDataProvider
     /// <exception cref="InvalidOperationException">
     /// Thrown when the supplied <paramref name="projectId"/> does not exist.
     /// </exception>
-    Task<ClaudeJob> CreateJobAsync(Guid projectId, string message, MessageKind kind = MessageKind.Chat, CancellationToken cancellationToken = default);
+    Task<ClaudeJob> CreateJobAsync(
+        Guid projectId,
+        string message,
+        MessageKind kind = MessageKind.Chat,
+        JobIntent intent = JobIntent.Conversation,
+        Guid? planId = null,
+        Guid? planStepId = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Retrieves a job by its identifier.
@@ -195,4 +202,98 @@ public interface IClaudeDataProvider
     /// </summary>
     /// <returns>The updated project, or <see langword="null"/> if it doesn't exist.</returns>
     Task<ClaudeProject?> UpdateMemorySelectionAsync(Guid projectId, MemorySelection selection, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Updates the editable fields of a project (description, primary ticket
+    /// pointer, working directory). Only non-null arguments are written.
+    /// </summary>
+    /// <returns>The updated project, or <see langword="null"/> if not found.</returns>
+    Task<ClaudeProject?> UpdateProjectAsync(
+        Guid projectId,
+        string? description = null,
+        Guid? ticketId = null,
+        string? workingDirectory = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sets a client's tab colour. Caller is responsible for validating the
+    /// hex string before calling.
+    /// </summary>
+    Task<ProjectClient?> UpdateClientColourAsync(Guid clientId, string colour, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Registers a new repo against a client. <paramref name="path"/> is
+    /// stored verbatim (the service layer is expected to normalise it).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when the client does not exist.</exception>
+    Task<ClientRepo> CreateClientRepoAsync(Guid clientId, string name, string path, CancellationToken cancellationToken = default);
+
+    /// <summary>Retrieves a single repo by id.</summary>
+    Task<ClientRepo?> GetClientRepoAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>Lists every repo registered against a client, oldest first.</summary>
+    Task<IReadOnlyList<ClientRepo>> ListClientReposAsync(Guid clientId, CancellationToken cancellationToken = default);
+
+    /// <summary>Removes a repo. Projects that linked to it are left dangling (RepoId cleared).</summary>
+    Task<bool> DeleteClientRepoAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Links a project to one of its client's repos (or clears the link when
+    /// <paramref name="repoId"/> is null). When linked, the project's
+    /// <see cref="ClaudeProject.WorkingDirectory"/> is updated to match.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the repo exists but does not belong to the project's client.
+    /// </exception>
+    Task<ClaudeProject?> AssignProjectRepoAsync(Guid projectId, Guid? repoId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the project's plan, creating an empty one on first access.
+    /// </summary>
+    Task<Plan> GetOrCreatePlanAsync(Guid projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>Returns every step of a plan in order.</summary>
+    Task<IReadOnlyList<PlanStep>> ListPlanStepsAsync(Guid planId, CancellationToken cancellationToken = default);
+
+    /// <summary>Appends a new step to the end of a plan.</summary>
+    Task<PlanStep> AddPlanStepAsync(Guid planId, string title, string description, CancellationToken cancellationToken = default);
+
+    /// <summary>Updates a step's title and/or description.</summary>
+    Task<PlanStep?> UpdatePlanStepAsync(Guid stepId, string title, string description, CancellationToken cancellationToken = default);
+
+    /// <summary>Replaces a step's status (and optional timestamps / job-id metadata).</summary>
+    Task<PlanStep?> UpdatePlanStepStatusAsync(
+        Guid stepId,
+        PlanStepStatus status,
+        Guid? jobId = null,
+        DateTimeOffset? startedAt = null,
+        DateTimeOffset? completedAt = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes a step and compacts the order of remaining steps.</summary>
+    Task<bool> DeletePlanStepAsync(Guid stepId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Replaces the order of a plan's steps. <paramref name="orderedStepIds"/>
+    /// must list every step belonging to the plan exactly once.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the supplied list does not match the plan's steps.
+    /// </exception>
+    Task<IReadOnlyList<PlanStep>> ReorderPlanStepsAsync(Guid planId, IReadOnlyList<Guid> orderedStepIds, CancellationToken cancellationToken = default);
+
+    /// <summary>Stores the most recent verification opinion against a plan.</summary>
+    Task<Plan?> RecordPlanVerificationAsync(Guid planId, string opinion, CancellationToken cancellationToken = default);
+
+    /// <summary>Creates a step review snapshotting the files Claude touched.</summary>
+    Task<StepReview> CreateStepReviewAsync(Guid projectId, Guid stepId, Guid jobId, IReadOnlyList<string> files, CancellationToken cancellationToken = default);
+
+    /// <summary>Retrieves a step review by id.</summary>
+    Task<StepReview?> GetStepReviewAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>Updates the per-file commit/rollback state on an existing review.</summary>
+    Task<StepReview?> UpdateStepReviewFileAsync(Guid reviewId, string path, StepReviewFileState state, CancellationToken cancellationToken = default);
+
+    /// <summary>Lists every review owned by a project, newest first.</summary>
+    Task<IReadOnlyList<StepReview>> ListStepReviewsByProjectAsync(Guid projectId, CancellationToken cancellationToken = default);
 }

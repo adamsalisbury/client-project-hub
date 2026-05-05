@@ -4,9 +4,10 @@ namespace ProjectHub.Domain.Models;
 public sealed record CreateClientRequest(string Name);
 
 /// <summary>Wire format for a client.</summary>
-public sealed record ClientResponse(Guid Id, string Name, DateTimeOffset CreatedAt)
+public sealed record ClientResponse(Guid Id, string Name, string Colour, DateTimeOffset CreatedAt)
 {
-    public static ClientResponse FromClient(ProjectClient c) => new(c.Id, c.Name, c.CreatedAt);
+    public static ClientResponse FromClient(ProjectClient c)
+        => new(c.Id, c.Name, c.Colour, c.CreatedAt);
 }
 
 /// <summary>Request body for <c>PUT /api/projects/{id}/client</c>.</summary>

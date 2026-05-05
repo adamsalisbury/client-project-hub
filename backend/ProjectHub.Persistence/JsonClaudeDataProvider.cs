@@ -34,6 +34,10 @@ public sealed class JsonClaudeDataProvider : IClaudeDataProvider
     private readonly Dictionary<Guid, ProjectClient> _clients = new();
     private readonly Dictionary<Guid, KnowledgeEntry> _clientKnowledge = new();
     private readonly Dictionary<Guid, Agent> _agents = new();
+    private readonly Dictionary<Guid, ClientRepo> _clientRepos = new();
+    private readonly Dictionary<Guid, Plan> _plans = new();
+    private readonly Dictionary<Guid, PlanStep> _planSteps = new();
+    private readonly Dictionary<Guid, StepReview> _stepReviews = new();
     private bool _initialized;
 
     public JsonClaudeDataProvider(
@@ -142,7 +146,14 @@ public sealed class JsonClaudeDataProvider : IClaudeDataProvider
     }
 
     /// <inheritdoc/>
-    public async Task<ClaudeJob> CreateJobAsync(Guid projectId, string message, MessageKind kind = MessageKind.Chat, CancellationToken cancellationToken = default)
+    public async Task<ClaudeJob> CreateJobAsync(
+        Guid projectId,
+        string message,
+        MessageKind kind = MessageKind.Chat,
+        JobIntent intent = JobIntent.Conversation,
+        Guid? planId = null,
+        Guid? planStepId = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(message);
 
@@ -162,6 +173,9 @@ public sealed class JsonClaudeDataProvider : IClaudeDataProvider
                 ProjectId = projectId,
                 Message = message,
                 Kind = kind,
+                Intent = intent,
+                PlanId = planId,
+                PlanStepId = planStepId,
                 Status = JobStatus.Queued,
                 CreatedAt = DateTimeOffset.UtcNow
             };
@@ -429,6 +443,7 @@ public sealed class JsonClaudeDataProvider : IClaudeDataProvider
             {
                 Id = Guid.NewGuid(),
                 Name = name.Trim(),
+                Colour = ClientColours.AutoAssign(_clients.Count),
                 CreatedAt = DateTimeOffset.UtcNow
             };
 
@@ -725,6 +740,536 @@ public sealed class JsonClaudeDataProvider : IClaudeDataProvider
         }
     }
 
+    /// <inheritdoc/>
+    public async Task<ClaudeProject?> UpdateProjectAsync(
+        Guid projectId,
+        string? description = null,
+        Guid? ticketId = null,
+        string? workingDirectory = null,
+        CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureLoadedAsync(cancellationToken);
+            if (!_projects.TryGetValue(projectId, out var project))
+            {
+                return null;
+            }
+
+            if (description is not null)
+            {
+                project.Description = description;
+            }
+            if (ticketId is not null)
+            {
+                project.TicketId = ticketId == Guid.Empty ? null : ticketId;
+            }
+            if (workingDirectory is not null)
+            {
+                project.WorkingDirectory = workingDirectory;
+            }
+
+            await PersistAsync(cancellationToken);
+            return Clone(project);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<ProjectClient?> UpdateClientColourAsync(Guid clientId, string colour, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(colour);
+
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureLoadedAsync(cancellationToken);
+            if (!_clients.TryGetValue(clientId, out var client))
+            {
+                return null;
+            }
+            client.Colour = colour;
+            await PersistAsync(cancellationToken);
+            return Clone(client);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<ClientRepo> CreateClientRepoAsync(Guid clientId, string name, string path, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureLoadedAsync(cancellationToken);
+            if (!_clients.ContainsKey(clientId))
+            {
+                throw new InvalidOperationException($"Client {clientId} does not exist.");
+            }
+
+            var repo = new ClientRepo
+            {
+                Id = Guid.NewGuid(),
+                ClientId = clientId,
+                Name = name.Trim(),
+                Path = path,
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+            _clientRepos[repo.Id] = repo;
+            await PersistAsync(cancellationToken);
+            return Clone(repo);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<ClientRepo?> GetClientRepoAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureLoadedAsync(cancellationToken);
+            return _clientRepos.TryGetValue(id, out var r) ? Clone(r) : null;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<ClientRepo>> ListClientReposAsync(Guid clientId, CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureLoadedAsync(cancellationToken);
+            return _clientRepos.Values
+                .Where(r => r.ClientId == clientId)
+                .OrderBy(r => r.CreatedAt)
+                .Select(Clone)
+                .ToList();
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<bool> DeleteClientRepoAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureLoadedAsync(cancellationToken);
+            if (!_clientRepos.Remove(id))
+            {
+                return false;
+            }
+            // Detach any project that pointed at this repo.
+            foreach (var project in _projects.Values.Where(p => p.RepoId == id))
+            {
+                project.RepoId = null;
+            }
+            await PersistAsync(cancellationToken);
+            return true;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<ClaudeProject?> AssignProjectRepoAsync(Guid projectId, Guid? repoId, CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureLoadedAsync(cancellationToken);
+            if (!_projects.TryGetValue(projectId, out var project))
+            {
+                return null;
+            }
+
+            if (repoId is null)
+            {
+                project.RepoId = null;
+            }
+            else
+            {
+                if (!_clientRepos.TryGetValue(repoId.Value, out var repo))
+                {
+                    throw new InvalidOperationException($"Repo {repoId} does not exist.");
+                }
+                if (repo.ClientId != project.ClientId)
+                {
+                    throw new InvalidOperationException(
+                        $"Repo {repoId} belongs to client {repo.ClientId}, not the project's client {project.ClientId}.");
+                }
+                project.RepoId = repo.Id;
+                project.WorkingDirectory = repo.Path;
+            }
+
+            await PersistAsync(cancellationToken);
+            return Clone(project);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<Plan> GetOrCreatePlanAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureLoadedAsync(cancellationToken);
+            if (!_projects.ContainsKey(projectId))
+            {
+                throw new InvalidOperationException($"Project {projectId} does not exist.");
+            }
+
+            var existing = _plans.Values.FirstOrDefault(p => p.ProjectId == projectId);
+            if (existing is not null)
+            {
+                return Clone(existing);
+            }
+
+            var plan = new Plan
+            {
+                Id = Guid.NewGuid(),
+                ProjectId = projectId,
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+            _plans[plan.Id] = plan;
+            await PersistAsync(cancellationToken);
+            return Clone(plan);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<PlanStep>> ListPlanStepsAsync(Guid planId, CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureLoadedAsync(cancellationToken);
+            return _planSteps.Values
+                .Where(s => s.PlanId == planId)
+                .OrderBy(s => s.Order)
+                .Select(Clone)
+                .ToList();
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<PlanStep> AddPlanStepAsync(Guid planId, string title, string description, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        ArgumentNullException.ThrowIfNull(description);
+
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureLoadedAsync(cancellationToken);
+            if (!_plans.TryGetValue(planId, out var plan))
+            {
+                throw new InvalidOperationException($"Plan {planId} does not exist.");
+            }
+
+            var nextOrder = _planSteps.Values
+                .Where(s => s.PlanId == planId)
+                .Select(s => (int?)s.Order)
+                .Max() + 1 ?? 0;
+
+            var step = new PlanStep
+            {
+                Id = Guid.NewGuid(),
+                PlanId = planId,
+                Order = nextOrder,
+                Title = title.Trim(),
+                Description = description
+            };
+            _planSteps[step.Id] = step;
+            plan.UpdatedAt = DateTimeOffset.UtcNow;
+
+            await PersistAsync(cancellationToken);
+            return Clone(step);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<PlanStep?> UpdatePlanStepAsync(Guid stepId, string title, string description, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        ArgumentNullException.ThrowIfNull(description);
+
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureLoadedAsync(cancellationToken);
+            if (!_planSteps.TryGetValue(stepId, out var step))
+            {
+                return null;
+            }
+            step.Title = title.Trim();
+            step.Description = description;
+            if (_plans.TryGetValue(step.PlanId, out var plan))
+            {
+                plan.UpdatedAt = DateTimeOffset.UtcNow;
+            }
+            await PersistAsync(cancellationToken);
+            return Clone(step);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<PlanStep?> UpdatePlanStepStatusAsync(
+        Guid stepId,
+        PlanStepStatus status,
+        Guid? jobId = null,
+        DateTimeOffset? startedAt = null,
+        DateTimeOffset? completedAt = null,
+        CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureLoadedAsync(cancellationToken);
+            if (!_planSteps.TryGetValue(stepId, out var step))
+            {
+                return null;
+            }
+            step.Status = status;
+            if (jobId is not null) step.JobId = jobId;
+            if (startedAt is not null) step.StartedAt = startedAt;
+            if (completedAt is not null) step.CompletedAt = completedAt;
+            await PersistAsync(cancellationToken);
+            return Clone(step);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<bool> DeletePlanStepAsync(Guid stepId, CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureLoadedAsync(cancellationToken);
+            if (!_planSteps.TryGetValue(stepId, out var step))
+            {
+                return false;
+            }
+            var planId = step.PlanId;
+            _planSteps.Remove(stepId);
+
+            // Compact the order of remaining steps in the same plan.
+            var remaining = _planSteps.Values.Where(s => s.PlanId == planId).OrderBy(s => s.Order).ToList();
+            for (var i = 0; i < remaining.Count; i++)
+            {
+                remaining[i].Order = i;
+            }
+
+            if (_plans.TryGetValue(planId, out var plan))
+            {
+                plan.UpdatedAt = DateTimeOffset.UtcNow;
+            }
+            await PersistAsync(cancellationToken);
+            return true;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<PlanStep>> ReorderPlanStepsAsync(Guid planId, IReadOnlyList<Guid> orderedStepIds, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(orderedStepIds);
+
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureLoadedAsync(cancellationToken);
+            if (!_plans.TryGetValue(planId, out var plan))
+            {
+                throw new InvalidOperationException($"Plan {planId} does not exist.");
+            }
+
+            var current = _planSteps.Values.Where(s => s.PlanId == planId).ToDictionary(s => s.Id);
+            if (current.Count != orderedStepIds.Count || orderedStepIds.Any(id => !current.ContainsKey(id)) || orderedStepIds.Distinct().Count() != orderedStepIds.Count)
+            {
+                throw new InvalidOperationException("Reorder list must contain every step in the plan exactly once.");
+            }
+
+            for (var i = 0; i < orderedStepIds.Count; i++)
+            {
+                current[orderedStepIds[i]].Order = i;
+            }
+            plan.UpdatedAt = DateTimeOffset.UtcNow;
+            await PersistAsync(cancellationToken);
+
+            return current.Values.OrderBy(s => s.Order).Select(Clone).ToList();
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<Plan?> RecordPlanVerificationAsync(Guid planId, string opinion, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(opinion);
+
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureLoadedAsync(cancellationToken);
+            if (!_plans.TryGetValue(planId, out var plan))
+            {
+                return null;
+            }
+            plan.LastVerificationOpinion = opinion;
+            plan.LastVerifiedAt = DateTimeOffset.UtcNow;
+            await PersistAsync(cancellationToken);
+            return Clone(plan);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<StepReview> CreateStepReviewAsync(Guid projectId, Guid stepId, Guid jobId, IReadOnlyList<string> files, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureLoadedAsync(cancellationToken);
+            var review = new StepReview
+            {
+                Id = Guid.NewGuid(),
+                ProjectId = projectId,
+                StepId = stepId,
+                JobId = jobId,
+                CreatedAt = DateTimeOffset.UtcNow,
+                Files = files.Select(f => new StepReviewFile { Path = f, State = StepReviewFileState.Pending }).ToList()
+            };
+            _stepReviews[review.Id] = review;
+            await PersistAsync(cancellationToken);
+            return Clone(review);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<StepReview?> GetStepReviewAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureLoadedAsync(cancellationToken);
+            return _stepReviews.TryGetValue(id, out var r) ? Clone(r) : null;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<StepReview?> UpdateStepReviewFileAsync(Guid reviewId, string path, StepReviewFileState state, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureLoadedAsync(cancellationToken);
+            if (!_stepReviews.TryGetValue(reviewId, out var review))
+            {
+                return null;
+            }
+            var file = review.Files.FirstOrDefault(f => string.Equals(f.Path, path, StringComparison.Ordinal));
+            if (file is null)
+            {
+                return null;
+            }
+            file.State = state;
+            file.ResolvedAt = state == StepReviewFileState.Pending ? null : DateTimeOffset.UtcNow;
+            await PersistAsync(cancellationToken);
+            return Clone(review);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<StepReview>> ListStepReviewsByProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureLoadedAsync(cancellationToken);
+            return _stepReviews.Values
+                .Where(r => r.ProjectId == projectId)
+                .OrderByDescending(r => r.CreatedAt)
+                .Select(Clone)
+                .ToList();
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
     private async Task EnsureLoadedAsync(CancellationToken cancellationToken)
     {
         if (_initialized)
@@ -786,6 +1331,26 @@ public sealed class JsonClaudeDataProvider : IClaudeDataProvider
                     {
                         _agents[id] = agent;
                     }
+
+                    foreach (var (id, repo) in snapshot.ClientRepos)
+                    {
+                        _clientRepos[id] = repo;
+                    }
+
+                    foreach (var (id, plan) in snapshot.Plans)
+                    {
+                        _plans[id] = plan;
+                    }
+
+                    foreach (var (id, step) in snapshot.PlanSteps)
+                    {
+                        _planSteps[id] = step;
+                    }
+
+                    foreach (var (id, review) in snapshot.StepReviews)
+                    {
+                        _stepReviews[id] = review;
+                    }
                 }
 
                 // Backfill default memory selection for any projects loaded
@@ -806,8 +1371,45 @@ public sealed class JsonClaudeDataProvider : IClaudeDataProvider
                     dirty = true;
                 }
 
+                // Backfill colours for clients loaded without one.
+                foreach (var client in _clients.Values.Where(c => string.IsNullOrEmpty(c.Colour)))
+                {
+                    client.Colour = ClientColours.Default;
+                    dirty = true;
+                }
+
+                // Backfill: each project with a working directory but no
+                // RepoId gets a synthesised ClientRepo on its client and a
+                // link to it, so the new repo-pointer model works even with
+                // legacy data.
+                foreach (var project in _projects.Values.Where(p => p.RepoId is null && !string.IsNullOrWhiteSpace(p.WorkingDirectory)))
+                {
+                    var existing = _clientRepos.Values.FirstOrDefault(r =>
+                        r.ClientId == project.ClientId &&
+                        string.Equals(r.Path, project.WorkingDirectory, StringComparison.Ordinal));
+
+                    if (existing is not null)
+                    {
+                        project.RepoId = existing.Id;
+                    }
+                    else
+                    {
+                        var repo = new ClientRepo
+                        {
+                            Id = Guid.NewGuid(),
+                            ClientId = project.ClientId,
+                            Name = DeriveRepoName(project.WorkingDirectory),
+                            Path = project.WorkingDirectory,
+                            CreatedAt = DateTimeOffset.UtcNow
+                        };
+                        _clientRepos[repo.Id] = repo;
+                        project.RepoId = repo.Id;
+                    }
+                    dirty = true;
+                }
+
                 _logger.LogInformation(
-                    "Loaded {ProjectCount} projects, {JobCount} jobs, {TicketCount} tickets, {KnowledgeCount} knowledge entries, {ClientCount} clients, {ClientKnowledgeCount} client knowledge entries, {AgentCount} agents from {FilePath}",
+                    "Loaded {ProjectCount} projects, {JobCount} jobs, {TicketCount} tickets, {KnowledgeCount} knowledge entries, {ClientCount} clients, {ClientKnowledgeCount} client knowledge entries, {AgentCount} agents, {RepoCount} client repos, {PlanCount} plans, {PlanStepCount} plan steps, {StepReviewCount} step reviews from {FilePath}",
                     _projects.Count,
                     _jobs.Count,
                     _tickets.Count,
@@ -815,6 +1417,10 @@ public sealed class JsonClaudeDataProvider : IClaudeDataProvider
                     _clients.Count,
                     _clientKnowledge.Count,
                     _agents.Count,
+                    _clientRepos.Count,
+                    _plans.Count,
+                    _planSteps.Count,
+                    _stepReviews.Count,
                     _filePath);
             }
             catch (JsonException ex)
@@ -841,6 +1447,7 @@ public sealed class JsonClaudeDataProvider : IClaudeDataProvider
         {
             Id = Guid.NewGuid(),
             Name = DefaultClientName,
+            Colour = ClientColours.AutoAssign(_clients.Count),
             CreatedAt = DateTimeOffset.UtcNow
         };
         _clients[client.Id] = client;
@@ -858,7 +1465,11 @@ public sealed class JsonClaudeDataProvider : IClaudeDataProvider
             Knowledge = new Dictionary<Guid, KnowledgeEntry>(_knowledge),
             Clients = new Dictionary<Guid, ProjectClient>(_clients),
             ClientKnowledge = new Dictionary<Guid, KnowledgeEntry>(_clientKnowledge),
-            Agents = new Dictionary<Guid, Agent>(_agents)
+            Agents = new Dictionary<Guid, Agent>(_agents),
+            ClientRepos = new Dictionary<Guid, ClientRepo>(_clientRepos),
+            Plans = new Dictionary<Guid, Plan>(_plans),
+            PlanSteps = new Dictionary<Guid, PlanStep>(_planSteps),
+            StepReviews = new Dictionary<Guid, StepReview>(_stepReviews)
         };
 
         var tempPath = _filePath + ".tmp";
@@ -878,6 +1489,9 @@ public sealed class JsonClaudeDataProvider : IClaudeDataProvider
         WorkingDirectory = project.WorkingDirectory,
         CreatedAt = project.CreatedAt,
         ClientId = project.ClientId,
+        RepoId = project.RepoId,
+        Description = project.Description,
+        TicketId = project.TicketId,
         MemorySelection = CloneSelection(project.MemorySelection)
     };
 
@@ -906,8 +1520,60 @@ public sealed class JsonClaudeDataProvider : IClaudeDataProvider
     {
         Id = client.Id,
         Name = client.Name,
+        Colour = client.Colour,
         CreatedAt = client.CreatedAt
     };
+
+    private static ClientRepo Clone(ClientRepo repo) => new()
+    {
+        Id = repo.Id,
+        ClientId = repo.ClientId,
+        Name = repo.Name,
+        Path = repo.Path,
+        CreatedAt = repo.CreatedAt
+    };
+
+    private static Plan Clone(Plan plan) => new()
+    {
+        Id = plan.Id,
+        ProjectId = plan.ProjectId,
+        CreatedAt = plan.CreatedAt,
+        UpdatedAt = plan.UpdatedAt,
+        LastVerificationOpinion = plan.LastVerificationOpinion,
+        LastVerifiedAt = plan.LastVerifiedAt
+    };
+
+    private static PlanStep Clone(PlanStep step) => new()
+    {
+        Id = step.Id,
+        PlanId = step.PlanId,
+        Order = step.Order,
+        Title = step.Title,
+        Description = step.Description,
+        Status = step.Status,
+        JobId = step.JobId,
+        StartedAt = step.StartedAt,
+        CompletedAt = step.CompletedAt
+    };
+
+    private static StepReview Clone(StepReview review) => new()
+    {
+        Id = review.Id,
+        ProjectId = review.ProjectId,
+        StepId = review.StepId,
+        JobId = review.JobId,
+        CreatedAt = review.CreatedAt,
+        Files = review.Files
+            .Select(f => new StepReviewFile { Path = f.Path, State = f.State, ResolvedAt = f.ResolvedAt })
+            .ToList()
+    };
+
+    private static string DeriveRepoName(string workingDirectory)
+    {
+        var trimmed = workingDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var leaf = Path.GetFileName(trimmed);
+        return string.IsNullOrEmpty(leaf) ? workingDirectory : leaf;
+    }
 
     private static KnowledgeEntry Clone(KnowledgeEntry entry) => new()
     {
@@ -938,6 +1604,9 @@ public sealed class JsonClaudeDataProvider : IClaudeDataProvider
         Message = job.Message,
         CreatedAt = job.CreatedAt,
         Kind = job.Kind,
+        Intent = job.Intent,
+        PlanId = job.PlanId,
+        PlanStepId = job.PlanStepId,
         Status = job.Status,
         Prompt = job.Prompt,
         Response = job.Response,

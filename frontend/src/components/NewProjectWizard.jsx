@@ -53,7 +53,14 @@ export default function NewProjectWizard({ clients, onComplete, onCancel, onClie
     const ensureProjectCreated = async () => {
         if (createdProject) return createdProject;
         const clientId = await resolveClientId();
-        const project = await api.createProject(name.trim(), workingDirectory, clientId);
+        const project = await api.createProject({
+            name: name.trim(),
+            clientId,
+            workingDirectory,
+            repoId: null,
+            description: null,
+            ticketId: null
+        });
         setCreatedProject(project);
         return project;
     };

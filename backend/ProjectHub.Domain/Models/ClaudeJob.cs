@@ -16,6 +16,20 @@ public sealed class ClaudeJob
 
     public MessageKind Kind { get; init; } = MessageKind.Chat;
 
+    /// <summary>
+    /// Why this job was queued. Defaults to <see cref="JobIntent.Conversation"/>
+    /// for the existing chat / edit flow; plan verification and plan-step
+    /// execution use the other values so the worker and chat history can
+    /// pick out their results.
+    /// </summary>
+    public JobIntent Intent { get; init; } = JobIntent.Conversation;
+
+    /// <summary>The plan this job is acting on, set when <see cref="Intent"/> is plan-related.</summary>
+    public Guid? PlanId { get; init; }
+
+    /// <summary>The plan step this job is executing, set when <see cref="Intent"/> is <see cref="JobIntent.PlanStep"/>.</summary>
+    public Guid? PlanStepId { get; init; }
+
     public JobStatus Status { get; set; } = JobStatus.Queued;
 
     /// <summary>

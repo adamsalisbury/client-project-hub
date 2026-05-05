@@ -5,8 +5,9 @@ using Microsoft.AspNetCore.Mvc;
 namespace ProjectHub.Api.Controllers;
 
 /// <summary>
-/// Web facade for project lifecycle, history, client attachment, memory
-/// usage, and memory selection. All work is delegated to <see cref="IProjectService"/>.
+/// Web facade for project lifecycle, history, client / repo attachment,
+/// memory usage, memory selection, and editable project metadata. All work
+/// is delegated to <see cref="IProjectService"/>.
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
@@ -17,7 +18,14 @@ public sealed class ProjectsController(IProjectService projects) : ControllerBas
     public async Task<IActionResult> Create([FromBody] CreateProjectRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var project = await projects.CreateAsync(request.Name ?? string.Empty, request.WorkingDirectory ?? string.Empty, request.ClientId, cancellationToken);
+        var project = await projects.CreateAsync(
+            request.Name,
+            request.ClientId,
+            request.RepoId,
+            request.WorkingDirectory,
+            request.Description,
+            request.TicketId,
+            cancellationToken);
         var response = ClaudeProjectResponse.FromProject(project);
         return CreatedAtAction(nameof(GetHistory), new { id = project.Id }, response);
     }
@@ -48,6 +56,24 @@ public sealed class ProjectsController(IProjectService projects) : ControllerBas
         return Ok(ClaudeProjectResponse.FromProject(project));
     }
 
+    [HttpPut("{id:guid}/repo")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AssignRepo(Guid id, [FromBody] AssignProjectRepoRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var project = await projects.AssignRepoAsync(id, request.RepoId, cancellationToken);
+        return Ok(ClaudeProjectResponse.FromProject(project));
+    }
+
+    [HttpPut("{id:guid}")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateProjectRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var project = await projects.UpdateAsync(id, request.Description, request.TicketId, cancellationToken);
+        return Ok(ClaudeProjectResponse.FromProject(project));
+    }
+
     [HttpGet("{id:guid}/memory-usage")]
     public async Task<IActionResult> GetMemoryUsage(Guid id, CancellationToken cancellationToken)
         => Ok(await projects.GetMemoryUsageAsync(id, cancellationToken));
@@ -75,3 +101,6 @@ public sealed class ProjectsController(IProjectService projects) : ControllerBas
         return Ok(MemorySelectionResponse.FromSelection(saved));
     }
 }
+
+/// <summary>Request body for <c>PUT /api/projects/{id}</c> for editable fields.</summary>
+public sealed record UpdateProjectRequest(string? Description, Guid? TicketId);

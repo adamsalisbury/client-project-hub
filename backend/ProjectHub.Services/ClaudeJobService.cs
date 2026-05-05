@@ -20,7 +20,7 @@ public sealed class ClaudeJobService(
         var project = await data.GetProjectAsync(projectId, cancellationToken)
             ?? throw new NotFoundException($"No project found with id {projectId}.");
 
-        var job = await data.CreateJobAsync(project.Id, message, kind, cancellationToken);
+        var job = await data.CreateJobAsync(project.Id, message, kind, cancellationToken: cancellationToken);
         await queue.EnqueueAsync(job.Id, cancellationToken);
         logger.LogInformation("Queued {Kind} job {JobId} in project {ProjectId}", kind, job.Id, project.Id);
         return job;

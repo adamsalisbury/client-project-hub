@@ -10,15 +10,18 @@ public sealed class ProjectService(IClaudeDataProvider data, ILogger<ProjectServ
     private const long MaxMemoryBytes = 1_000_000;
 
     /// <inheritdoc/>
-    public async Task<ClaudeProject> CreateAsync(string name, string workingDirectory, Guid clientId, CancellationToken cancellationToken)
+    public async Task<ClaudeProject> CreateAsync(
+        string name,
+        Guid clientId,
+        Guid? repoId,
+        string? workingDirectory,
+        string? description,
+        Guid? ticketId,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
             throw new ValidationException("The 'name' field is required.");
-        }
-        if (string.IsNullOrWhiteSpace(workingDirectory))
-        {
-            throw new ValidationException("The 'workingDirectory' field is required.");
         }
         if (clientId == Guid.Empty)
         {
@@ -30,30 +33,103 @@ public sealed class ProjectService(IClaudeDataProvider data, ILogger<ProjectServ
         }
 
         string resolved;
-        try
+        ClientRepo? repo = null;
+        if (repoId is { } id && id != Guid.Empty)
         {
-            resolved = Path.GetFullPath(workingDirectory);
+            repo = await data.GetClientRepoAsync(id, cancellationToken)
+                ?? throw new ValidationException($"No repo found with id {id}.");
+            if (repo.ClientId != clientId)
+            {
+                throw new ValidationException($"Repo {id} does not belong to client {clientId}.");
+            }
+            resolved = repo.Path;
         }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        else
         {
-            throw new ValidationException($"'{workingDirectory}' is not a valid path.");
-        }
-
-        if (!Directory.Exists(resolved))
-        {
-            throw new ValidationException($"Directory '{resolved}' does not exist on the API host.");
-        }
-        if (!Path.Exists(Path.Combine(resolved, ".git")))
-        {
-            throw new ValidationException(
-                $"Directory '{resolved}' is not a git repository. Run 'git init' first or pick a different folder.");
+            if (string.IsNullOrWhiteSpace(workingDirectory))
+            {
+                throw new ValidationException("Either 'repoId' or 'workingDirectory' must be supplied.");
+            }
+            try
+            {
+                resolved = Path.GetFullPath(workingDirectory);
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                throw new ValidationException($"'{workingDirectory}' is not a valid path.");
+            }
+            if (!Directory.Exists(resolved))
+            {
+                throw new ValidationException($"Directory '{resolved}' does not exist on the API host.");
+            }
+            if (!Path.Exists(Path.Combine(resolved, ".git")))
+            {
+                throw new ValidationException(
+                    $"Directory '{resolved}' is not a git repository. Run 'git init' first or pick a different folder.");
+            }
         }
 
         var project = await data.CreateProjectAsync(name, resolved, clientId, cancellationToken);
+
+        // If the caller supplied a working directory rather than a repoId,
+        // promote the directory to a registered repo on the client and link
+        // the project to it, so the new repo-pointer model is consistent.
+        if (repo is null)
+        {
+            var derivedName = DeriveRepoName(resolved);
+            repo = await data.CreateClientRepoAsync(clientId, derivedName, resolved, cancellationToken);
+        }
+
+        await data.AssignProjectRepoAsync(project.Id, repo.Id, cancellationToken);
+
+        if (description is not null || ticketId is not null)
+        {
+            project = await data.UpdateProjectAsync(project.Id, description, ticketId, cancellationToken: cancellationToken)
+                ?? project;
+        }
+        else
+        {
+            project = await data.GetProjectAsync(project.Id, cancellationToken) ?? project;
+        }
+
         logger.LogInformation(
-            "Created project {ProjectId} named '{Name}' under client {ClientId} (cwd: {WorkingDirectory})",
-            project.Id, project.Name, project.ClientId, project.WorkingDirectory);
+            "Created project {ProjectId} named '{Name}' under client {ClientId} repo {RepoId} (cwd: {WorkingDirectory})",
+            project.Id, project.Name, project.ClientId, project.RepoId, project.WorkingDirectory);
         return project;
+    }
+
+    /// <inheritdoc/>
+    public async Task<ClaudeProject> AssignRepoAsync(Guid projectId, Guid? repoId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var project = await data.AssignProjectRepoAsync(projectId, repoId, cancellationToken);
+            if (project is null)
+            {
+                throw new NotFoundException($"No project found with id {projectId}.");
+            }
+            logger.LogInformation("Project {ProjectId} repo set to {RepoId}", projectId, repoId);
+            return project;
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new ValidationException(ex.Message);
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<ClaudeProject> UpdateAsync(Guid projectId, string? description, Guid? ticketId, CancellationToken cancellationToken)
+    {
+        var project = await data.UpdateProjectAsync(projectId, description, ticketId, cancellationToken: cancellationToken)
+            ?? throw new NotFoundException($"No project found with id {projectId}.");
+        return project;
+    }
+
+    private static string DeriveRepoName(string workingDirectory)
+    {
+        var trimmed = workingDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var leaf = Path.GetFileName(trimmed);
+        return string.IsNullOrEmpty(leaf) ? workingDirectory : leaf;
     }
 
     /// <inheritdoc/>

@@ -20,4 +20,12 @@ internal sealed class ClaudeDataSnapshot
     public Dictionary<Guid, KnowledgeEntry> ClientKnowledge { get; init; } = new();
 
     public Dictionary<Guid, Agent> Agents { get; init; } = new();
+
+    public Dictionary<Guid, ClientRepo> ClientRepos { get; init; } = new();
+
+    public Dictionary<Guid, Plan> Plans { get; init; } = new();
+
+    public Dictionary<Guid, PlanStep> PlanSteps { get; init; } = new();
+
+    public Dictionary<Guid, StepReview> StepReviews { get; init; } = new();
 }
