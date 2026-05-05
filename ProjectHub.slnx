@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ProjectHub.Domain/ProjectHub.Domain.csproj" />
+    <Project Path="src/ProjectHub.Services/ProjectHub.Services.csproj" />
+    <Project Path="src/ProjectHub.Persistence/ProjectHub.Persistence.csproj" />
+    <Project Path="src/ProjectHub.Api/ProjectHub.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ProjectHub.Tests/ProjectHub.Tests.csproj" />
+  </Folder>
+</Solution>

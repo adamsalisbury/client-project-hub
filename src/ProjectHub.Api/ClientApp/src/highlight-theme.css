@@ -1,0 +1,70 @@
+/*
+  Light, high-contrast highlight.js theme - tuned to the app's tokens so
+  highlighted code reads cleanly on `--surface` backgrounds.
+*/
+.hljs {
+    color: var(--text);
+    background: transparent;
+    font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+}
+
+.hljs-comment,
+.hljs-quote {
+    color: #6a7370;
+    font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-doctag,
+.hljs-name,
+.hljs-strong {
+    color: #963f1f;
+    font-weight: 600;
+}
+
+.hljs-built_in,
+.hljs-type,
+.hljs-class .hljs-title,
+.hljs-title.class_,
+.hljs-title.function_ {
+    color: #1c4d96;
+    font-weight: 600;
+}
+
+.hljs-string,
+.hljs-attr,
+.hljs-meta-string,
+.hljs-template-variable {
+    color: #1c6a2e;
+}
+
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link {
+    color: #7a3d96;
+}
+
+.hljs-variable,
+.hljs-meta {
+    color: #4a4641;
+}
+
+.hljs-tag,
+.hljs-attribute {
+    color: #1c4d96;
+}
+
+.hljs-subst { color: var(--text); }
+
+.hljs-regexp { color: #b8542f; }
+
+.hljs-emphasis { font-style: italic; }
+
+/* Diff colours */
+.hljs-addition { background: rgba(28, 106, 46, 0.10); color: #1c6a2e; display: block; }
+.hljs-deletion { background: rgba(150, 47, 36, 0.10); color: #962f24; display: block; }
+.hljs-meta    { color: #1c4d96; }

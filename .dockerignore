@@ -1,0 +1,11 @@
+**/bin
+**/obj
+**/node_modules
+**/wwwroot
+**/.vs
+**/.vscode
+**/.idea
+.git
+.gitignore
+**/*.log
+src/ProjectHub.Api/data

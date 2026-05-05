@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>ProjectHub.Api</RootNamespace>
+    <ClientAppDir>$(MSBuildProjectDirectory)/ClientApp</ClientAppDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.7" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ProjectHub.Domain\ProjectHub.Domain.csproj" />
+    <ProjectReference Include="..\ProjectHub.Services\ProjectHub.Services.csproj" />
+    <ProjectReference Include="..\ProjectHub.Persistence\ProjectHub.Persistence.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="ClientApp/node_modules/**" />
+    <Content Remove="ClientApp/node_modules/**" />
+    <Compile Remove="ClientApp/**" />
+  </ItemGroup>
+
+  <Target Name="EnsureNodeAvailable" BeforeTargets="BuildClientApp" Condition="'$(SkipClientBuild)' != 'true'">
+    <Exec Command="node --version" StandardOutputImportance="low" StandardErrorImportance="low" IgnoreExitCode="true">
+      <Output TaskParameter="ExitCode" PropertyName="NodeExitCode" />
+    </Exec>
+    <Error Condition="'$(NodeExitCode)' != '0'" Text="Node.js is required to build the React client." />
+  </Target>
+
+  <Target Name="InstallClientApp" BeforeTargets="BuildClientApp" Condition="'$(SkipClientBuild)' != 'true' AND !Exists('$(ClientAppDir)/node_modules')">
+    <Message Importance="high" Text="Installing React client dependencies." />
+    <Exec WorkingDirectory="$(ClientAppDir)" Command="npm install --no-audit --no-fund" />
+  </Target>
+
+  <Target Name="BuildClientApp" BeforeTargets="ResolveStaticWebAssetsInputs;AssignTargetPaths;PrepareForRun" Condition="'$(SkipClientBuild)' != 'true'">
+    <Message Importance="high" Text="Building React client." />
+    <Exec WorkingDirectory="$(ClientAppDir)" Command="npm run build" />
+  </Target>
+
+</Project>
