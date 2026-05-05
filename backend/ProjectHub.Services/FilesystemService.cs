@@ -1,18 +1,19 @@
+using Microsoft.Extensions.Options;
 using ProjectHub.Domain.Models;
 
 namespace ProjectHub.Services;
 
 /// <inheritdoc/>
-public sealed class FilesystemService(ILogger<FilesystemService> logger) : IFilesystemService
+public sealed class FilesystemService(
+    IOptions<FilesystemOptions> options,
+    ILogger<FilesystemService> logger) : IFilesystemService
 {
+    private readonly FilesystemOptions _options = options?.Value ?? new FilesystemOptions();
+
     /// <inheritdoc/>
     public FilesystemBrowseResponse Browse(string? path)
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        if (string.IsNullOrEmpty(home))
-        {
-            home = Path.GetTempPath();
-        }
+        var home = ResolveHome();
 
         string requested;
         if (string.IsNullOrWhiteSpace(path) || path == "~")
@@ -85,5 +86,20 @@ public sealed class FilesystemService(ILogger<FilesystemService> logger) : IFile
             ParentPath: parent,
             HomePath: home,
             Entries: entries);
+    }
+
+    private string ResolveHome()
+    {
+        if (!string.IsNullOrWhiteSpace(_options.BrowseRoot) && Directory.Exists(_options.BrowseRoot))
+        {
+            return Path.GetFullPath(_options.BrowseRoot);
+        }
+
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (string.IsNullOrEmpty(home))
+        {
+            home = Path.GetTempPath();
+        }
+        return home;
     }
 }

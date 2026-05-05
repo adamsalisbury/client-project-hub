@@ -1,5 +1,23 @@
-# Multi-stage Dockerfile that builds the React frontend + .NET backend
-# and runs them as a single container serving the SPA + API on $PORT (default 5090).
+# Multi-stage Dockerfile that builds the React frontend + .NET backend and
+# produces a single self-contained runtime image with the Claude Code CLI
+# pre-installed. Build and run with:
+#
+#   docker build -t client-project-hub .
+#   docker run --rm -p 5090:5090 \
+#       -v ~/clients:/clients \
+#       -v $PWD/data:/app/data \
+#       -v ~/.claude:/root/.claude \
+#       client-project-hub
+#
+# Volumes:
+#   /app/data       - JSON-backed job/client/project/ticket store (writable).
+#   /clients        - host directory of project repos. The path browser opens
+#                     here by default; bind-mount your host ~/clients (or
+#                     similar) to /clients. The Claude runner edits files in
+#                     these working directories, so the mount needs to be
+#                     read+write.
+#   /root/.claude   - Claude Code CLI auth/session state. Without this the
+#                     CLI inside the container will need to log in interactively.
 
 # ---------- Stage 1: build the React frontend ----------
 FROM node:22-alpine AS frontend-build
@@ -41,27 +59,45 @@ RUN dotnet publish backend/ProjectHub.Api/ProjectHub.Api.csproj \
     /p:SkipClientBuild=true \
     --no-restore
 
-# ---------- Stage 3: minimal runtime ----------
+# ---------- Stage 3: runtime ----------
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-# git is needed by the diff/history endpoints; node + claude CLI
-# are only required if you want the runner to actually invoke Claude.
+# System packages:
+#   git           - used by the file-history / diff endpoints
+#   ca-certs      - for HTTPS to npm registry + Anthropic API
+#   curl          - bootstrap NodeSource repo
+#   nodejs (22.x) - required by the Claude Code CLI
+# Then install the Claude Code CLI globally so `claude` is on PATH for the runner.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends git ca-certificates curl gnupg \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && npm install -g @anthropic-ai/claude-code \
+    && apt-get purge -y --auto-remove curl gnupg \
+    && rm -rf /var/lib/apt/lists/* /root/.npm
 
 COPY --from=backend-build /app/publish .
 
+# Pre-create the volume targets so the container has them on first start, even
+# without a bind mount. /clients is where the host's projects directory should
+# be mounted; chmod 0777 keeps things permissive in case the bind-mount source
+# files are owned by a non-root host user (the container runs as root by default
+# under Linux Docker, so this is mainly belt-and-braces for non-mounted dev runs).
+RUN mkdir -p /app/data /clients /root/.claude \
+    && chmod 0777 /clients
+
 ENV ASPNETCORE_ENVIRONMENT=Production \
-    ASPNETCORE_URLS=http://+:5090 \
     Server__Port=5090 \
+    JsonDataProvider__FilePath=/app/data/jobs.json \
+    Filesystem__BrowseRoot=/clients \
     DOTNET_RUNNING_IN_CONTAINER=true \
     DOTNET_USE_POLLING_FILE_WATCHER=false
 
 EXPOSE 5090
 
-# Mount-points: keep the JSON store and any Claude config outside the image.
-VOLUME ["/app/data"]
+# Mount-points: keep the JSON store, the host's project directory, and the
+# Claude CLI auth state outside the image so they survive container rebuilds.
+VOLUME ["/app/data", "/clients", "/root/.claude"]
 
 ENTRYPOINT ["dotnet", "ProjectHub.Api.dll"]

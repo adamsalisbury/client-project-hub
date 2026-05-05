@@ -104,10 +104,27 @@ dotnet test
 
 ## Docker
 
+The Dockerfile builds the frontend and backend in their own stages, copies
+the SPA bundle into the API's `wwwroot`, and produces a runtime image that
+already has `git`, `node`, and the Claude Code CLI installed.
+
 ```bash
-docker build -t project-hub .
-docker run --rm -p 5090:5090 -v $PWD/data:/app/data project-hub
+docker build -t client-project-hub .
+
+docker run --rm -p 5090:5090 \
+  -v ~/clients:/clients \
+  -v $PWD/data:/app/data \
+  -v ~/.claude:/root/.claude \
+  client-project-hub
 ```
+
+Volumes:
+
+| Mount | Purpose |
+|---|---|
+| `/clients` | The host directory of project repos. The path browser opens here by default (configured via `Filesystem__BrowseRoot=/clients`) and the Claude runner edits files in their working dirs, so this needs to be read+write. |
+| `/app/data` | JSON-backed job/client/project/ticket store. Persists across container restarts. |
+| `/root/.claude` | Claude Code CLI auth/session state. Mount your host `~/.claude` to reuse an existing login; without it, `claude login` must be run inside the container the first time. |
 
 ## Licence
 

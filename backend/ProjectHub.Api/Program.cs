@@ -36,6 +36,10 @@ builder.Services
     .Bind(builder.Configuration.GetSection(JsonDataProviderOptions.SectionName))
     .ValidateDataAnnotations();
 
+builder.Services
+    .AddOptions<FilesystemOptions>()
+    .Bind(builder.Configuration.GetSection(FilesystemOptions.SectionName));
+
 // Persistence + low-level infrastructure.
 builder.Services.AddSingleton<IClaudeRunner, ClaudeRunner>();
 builder.Services.AddSingleton<IClaudeDataProvider, JsonClaudeDataProvider>();
