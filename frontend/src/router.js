@@ -22,13 +22,17 @@
  * Legacy `/project/<id>/...` URLs still parse (mapped to the same shapes).
  */
 
-const PERMANENT_SUB_KINDS = new Set(['info', 'files', 'chat', 'agents', 'plan', 'memory-tweak']);
+const PERMANENT_SUB_KINDS = new Set(['files', 'chat', 'agents', 'plan', 'memory-tweak']);
 
 export function parseRoute(pathname, search) {
     const params = new URLSearchParams(search || '');
 
     if (!pathname || pathname === '/') {
         return { kind: 'home' };
+    }
+
+    if (pathname === '/settings' || pathname === '/settings/') {
+        return { kind: 'settings' };
     }
 
     let m = pathname.match(/^\/c\/([^/]+)\/?$/);
@@ -84,13 +88,13 @@ export function parseRoute(pathname, search) {
 
 export function buildPath(tab) {
     if (!tab || tab.kind === 'home') return '/';
+    if (tab.kind === 'settings') return '/settings';
     if (tab.kind === 'client') return `/c/${tab.payload.clientId}`;
     if (tab.kind === 'project') return `/p/${tab.payload.projectId}`;
     if (tab.kind === 'sub') {
         const base = `/p/${tab.payload.projectId}`;
         const sub = tab.payload.subKind;
         switch (sub) {
-            case 'info':
             case 'files':
             case 'chat':
             case 'agents':

@@ -171,5 +171,11 @@ export const api = {
     commitReviewFile: (projectId, reviewId, path, message) =>
         request('POST', `/api/projects/${projectId}/step-reviews/${reviewId}/commit`, { path, message }),
     rollbackReviewFile: (projectId, reviewId, path) =>
-        request('POST', `/api/projects/${projectId}/step-reviews/${reviewId}/rollback`, { path })
+        request('POST', `/api/projects/${projectId}/step-reviews/${reviewId}/rollback`, { path }),
+    getSettings: () =>
+        request('GET', '/api/settings'),
+    updateSettings: (payload) =>
+        request('PUT', '/api/settings', payload),
+    summariseMemorySection: (projectId, section) =>
+        request('POST', `/api/projects/${projectId}/memory-summary`, { section })
 };

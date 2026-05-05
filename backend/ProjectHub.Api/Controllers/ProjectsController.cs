@@ -94,12 +94,36 @@ public sealed class ProjectsController(IProjectService projects) : ControllerBas
             ExcludedTicketIds = request.ExcludedTicketIds?.ToList() ?? new(),
             ExcludedProjectKnowledgeIds = request.ExcludedProjectKnowledgeIds?.ToList() ?? new(),
             ExcludedClientKnowledgeIds = request.ExcludedClientKnowledgeIds?.ToList() ?? new(),
-            ExcludedConversationJobIds = request.ExcludedConversationJobIds?.ToList() ?? new()
+            ExcludedConversationJobIds = request.ExcludedConversationJobIds?.ToList() ?? new(),
+            SectionSummaries = request.SectionSummaries?.ToDictionary(
+                kvp => kvp.Key,
+                kvp => new MemorySectionSummary
+                {
+                    Body = kvp.Value.Body,
+                    GeneratedAt = kvp.Value.GeneratedAt,
+                    Included = kvp.Value.Included
+                }) ?? new()
         };
         var saved = await projects.UpdateMemorySelectionAsync(id, selection, cancellationToken);
         return Ok(MemorySelectionResponse.FromSelection(saved));
     }
+
+    [HttpPost("{id:guid}/memory-summary")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> GenerateMemorySummary(
+        Guid id,
+        [FromBody] MemorySummaryRequest request,
+        [FromServices] IMemorySummaryService summaries,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var summary = await summaries.GenerateAsync(id, request.Section, cancellationToken);
+        return Ok(new MemorySectionSummaryResponse(summary.Body, summary.GeneratedAt, summary.Included));
+    }
 }
+
+/// <summary>Request body for <c>POST /api/projects/{id}/memory-summary</c>.</summary>
+public sealed record MemorySummaryRequest(string Section);
 
 /// <summary>Request body for <c>PUT /api/projects/{id}</c> for editable fields.</summary>
 public sealed record UpdateProjectRequest(string? Description, Guid? TicketId);

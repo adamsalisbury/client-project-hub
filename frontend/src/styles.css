@@ -2441,7 +2441,7 @@ body.dragging-splitter {
     grid-template-columns: repeat(8, 1.6rem);
     gap: 0.3rem;
     padding: 0.5rem;
-    background: var(--surface-1);
+    background: #ffffff;
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
@@ -2480,8 +2480,38 @@ body.dragging-splitter {
 }
 
 .client-view-identity { display: flex; flex-direction: column; gap: 0.2rem; }
-.client-view-name { margin: 0; font-size: 1.5rem; }
 .client-view-id { font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); }
+
+.page-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+.page-title {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+.settings-view {
+    padding: 1.4rem 1.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.4rem;
+    max-width: 56rem;
+}
+.settings-saved-marker {
+    align-self: center;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+}
+.project-hub-no-repo {
+    margin: 0.5rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
 
 .client-view-colour {
     display: flex;

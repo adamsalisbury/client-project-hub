@@ -4,7 +4,7 @@ import { api } from '../api.js';
 /**
  * Sub-tab body for the project's plan. Steps are linearly ordered: each step
  * assumes the prior one has been executed. Verify produces an opinion that
- * lands in the project chat; per-step Execute kicks off a Claude job.
+ * lands in the project chat; per-step Execute kicks off an AI job.
  */
 export default function PlanTab({ project, onOpenSub, onError }) {
     const [plan, setPlan] = useState(null);
@@ -135,7 +135,7 @@ export default function PlanTab({ project, onOpenSub, onError }) {
                     className="btn btn-primary"
                     onClick={verify}
                     disabled={busy || steps.length === 0}
-                    title={steps.length === 0 ? 'Add a step before verifying' : 'Ask Claude to review the plan'}
+                    title={steps.length === 0 ? 'Add a step before verifying' : 'Ask the AI to review the plan'}
                 >
                     Verify plan
                 </button>

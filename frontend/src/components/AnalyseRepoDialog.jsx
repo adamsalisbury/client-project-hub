@@ -23,7 +23,7 @@ export default function AnalyseRepoDialog({ project, onAnalyse, onCancel }) {
             <form className="modal" onSubmit={handleSubmit}>
                 <h2 className="modal-title">Analyse repo</h2>
                 <p className="modal-help">
-                    Claude will read the working directory at <code className="info-mono">{project.workingDirectory}</code>,
+                    The AI will read the working directory at <code className="info-mono">{project.workingDirectory ?? '(no repo)'}</code>,
                     map its sections, summarise their architecture, and produce an overall write-up.
                     The result is saved as a knowledge entry. This may take a minute or two.
                 </p>
@@ -58,7 +58,7 @@ export default function AnalyseRepoDialog({ project, onAnalyse, onCancel }) {
                 <div className="modal-actions">
                     <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={busy}>Cancel</button>
                     <button type="submit" className="btn btn-primary" disabled={busy}>
-                        {busy ? 'Asking Claude.' : 'Run analysis'}
+                        {busy ? 'Asking the AI…' : 'Run analysis'}
                     </button>
                 </div>
             </form>

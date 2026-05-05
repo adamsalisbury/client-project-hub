@@ -7,6 +7,7 @@ import SubTabHost from './components/SubTabHost.jsx';
 import NewProjectWizard from './components/NewProjectWizard.jsx';
 import CreateClientDialog from './components/CreateClientDialog.jsx';
 import WorkspaceTabBar from './components/WorkspaceTabBar.jsx';
+import SettingsView from './components/SettingsView.jsx';
 import Toast from './components/Toast.jsx';
 import { parseRoute, buildPath, pushUrl, replaceUrl, currentLocation } from './router.js';
 
@@ -35,6 +36,7 @@ function persistTabs(tabs, activeId) {
 
 function tabIdForRoute(route) {
     if (route.kind === 'home') return 'home';
+    if (route.kind === 'settings') return 'settings';
     if (route.kind === 'client') return `client:${route.clientId}`;
     if (route.kind === 'project') return `project:${route.projectId}`;
     if (route.kind === 'sub') {
@@ -52,6 +54,9 @@ function tabIdForRoute(route) {
 
 function tabFromRoute(route) {
     if (route.kind === 'home') return { ...HOME_TAB };
+    if (route.kind === 'settings') {
+        return { id: 'settings', kind: 'settings', closable: true, payload: {} };
+    }
     if (route.kind === 'client') {
         return {
             id: `client:${route.clientId}`,
@@ -77,7 +82,7 @@ function tabFromRoute(route) {
 }
 
 const SUB_KIND_LABEL = {
-    info: 'info', files: 'files', chat: 'chat', agents: 'agents',
+    files: 'files', chat: 'chat', agents: 'agents',
     plan: 'plan', 'memory-tweak': 'memory tweak',
     file: 'file', diff: 'diff', ticket: 'ticket', agent: 'agent',
     'knowledge-project': 'knowledge', 'knowledge-client': 'knowledge',
@@ -173,6 +178,7 @@ export default function App() {
 
     const labelFor = useCallback((tab) => {
         if (tab.kind === 'home') return 'home';
+        if (tab.kind === 'settings') return 'settings';
         if (tab.kind === 'client') {
             const c = clientById.get(tab.payload.clientId);
             return `client (${c?.name ?? tab.payload.clientId.slice(0, 6)})`;
@@ -198,7 +204,7 @@ export default function App() {
     }, [clientById, projectById]);
 
     const colourFor = useCallback((tab) => {
-        if (tab.kind === 'home') return null;
+        if (tab.kind === 'home' || tab.kind === 'settings') return null;
         let clientId = null;
         if (tab.kind === 'client') {
             clientId = tab.payload.clientId;
@@ -245,6 +251,10 @@ export default function App() {
     // Helpers wired into Home / Client / Project hub views.
     const openClientTab = useCallback((clientId) => {
         openTab({ id: `client:${clientId}`, kind: 'client', closable: true, payload: { clientId } });
+    }, [openTab]);
+
+    const openSettingsTab = useCallback(() => {
+        openTab({ id: 'settings', kind: 'settings', closable: true, payload: {} });
     }, [openTab]);
 
     const openProjectTab = useCallback((projectId) => {
@@ -307,7 +317,12 @@ export default function App() {
                         onPickProject={openProjectTab}
                         onNewClient={() => setShowCreateClient(true)}
                         onNewProject={() => setShowProjectWizard(true)}
+                        onOpenSettings={openSettingsTab}
                     />
+                )}
+
+                {activeTab?.kind === 'settings' && (
+                    <SettingsView onError={setError} />
                 )}
 
                 {activeTab?.kind === 'client' && (

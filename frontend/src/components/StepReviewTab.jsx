@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api.js';
 
 /**
- * Sub-tab body for a single plan-step's review. Lists every file Claude
+ * Sub-tab body for a single plan-step's review. Lists every file the AI
  * touched, lets the user click through to the diff, and per-file commit /
  * rollback. Spawned automatically by the project hub when a plan step
  * finishes; can also be reopened from the project's recent-reviews list.

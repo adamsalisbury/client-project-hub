@@ -3,11 +3,7 @@ import { api } from '../api.js';
 
 function formatTimestamp(iso) {
     if (!iso) return '';
-    try {
-        return new Date(iso).toLocaleString();
-    } catch {
-        return iso;
-    }
+    try { return new Date(iso).toLocaleString(); } catch { return iso; }
 }
 
 function summarise(text, max = 80) {
@@ -17,11 +13,8 @@ function summarise(text, max = 80) {
 }
 
 function bytesOf(text) {
-    try {
-        return new TextEncoder().encode(text || '').length;
-    } catch {
-        return (text || '').length;
-    }
+    try { return new TextEncoder().encode(text || '').length; }
+    catch { return (text || '').length; }
 }
 
 function formatBytes(n) {
@@ -29,6 +22,14 @@ function formatBytes(n) {
     if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
     return `${(n / (1024 * 1024)).toFixed(2)} MB`;
 }
+
+const SECTION_LABELS = {
+    clientKnowledge: 'client knowledge',
+    projectKnowledge: 'project knowledge',
+    tickets: 'tickets',
+    conversation: 'conversation history',
+    projectDescription: 'project description'
+};
 
 export default function MemoryTweakingTab({ project, onError, onProjectChanged }) {
     const [selection, setSelection] = useState(null);
@@ -41,6 +42,7 @@ export default function MemoryTweakingTab({ project, onError, onProjectChanged }
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
+    const [generating, setGenerating] = useState(null);
 
     const reload = useCallback(async () => {
         setLoading(true);
@@ -83,7 +85,7 @@ export default function MemoryTweakingTab({ project, onError, onProjectChanged }
     const totalBytes = useMemo(() => {
         if (!selection) return 0;
         let total = 0;
-        if (selection.includeProjectInfo) total += bytesOf(project.name) + bytesOf(project.workingDirectory);
+        if (selection.includeProjectInfo) total += bytesOf(project.name) + bytesOf(project.workingDirectory ?? '');
         if (selection.includeClientInfo && client) total += bytesOf(client.name);
 
         const excludedAgents = new Set(selection.excludedAgentIds);
@@ -109,6 +111,10 @@ export default function MemoryTweakingTab({ project, onError, onProjectChanged }
         const excludedJobs = new Set(selection.excludedConversationJobIds);
         for (const m of conversation) {
             if (!excludedJobs.has(m.id)) total += bytesOf(m.message) + bytesOf(m.response || '');
+        }
+
+        for (const summary of Object.values(selection.sectionSummaries ?? {})) {
+            if (summary?.included) total += bytesOf(summary.body);
         }
 
         return total;
@@ -144,6 +150,35 @@ export default function MemoryTweakingTab({ project, onError, onProjectChanged }
         setDirty(true);
     };
 
+    const setSummaryIncluded = (section, included) => {
+        setSelection((prev) => {
+            if (!prev) return prev;
+            const summaries = { ...(prev.sectionSummaries ?? {}) };
+            const existing = summaries[section];
+            if (!existing) return prev;
+            summaries[section] = { ...existing, included };
+            return { ...prev, sectionSummaries: summaries };
+        });
+        setDirty(true);
+    };
+
+    const generateSummary = async (section) => {
+        setGenerating(section);
+        try {
+            const summary = await api.summariseMemorySection(project.id, section);
+            setSelection((prev) => {
+                if (!prev) return prev;
+                const summaries = { ...(prev.sectionSummaries ?? {}) };
+                summaries[section] = summary;
+                return { ...prev, sectionSummaries: summaries };
+            });
+        } catch (err) {
+            onError?.(err.message);
+        } finally {
+            setGenerating(null);
+        }
+    };
+
     const save = async () => {
         if (!selection) return;
         setSaving(true);
@@ -163,15 +198,18 @@ export default function MemoryTweakingTab({ project, onError, onProjectChanged }
         return <div className="empty-state subtle">Loading memory selection…</div>;
     }
 
+    const summaryFor = (section) => selection.sectionSummaries?.[section];
+
     return (
         <div className="memory-tweak">
             <header className="memory-tweak-header">
                 <div>
-                    <h1 className="document-tab-title">Memory tweaking</h1>
+                    <h1 className="page-title">Memory tweaking</h1>
                     <p className="modal-help">
-                        Tick the items you want sent to Claude with each prompt. Untick anything that's
-                        no longer relevant - useful for trimming an oversized history. Changes are saved
-                        when you press <em>Save</em>.
+                        Tick the items you want sent to the AI with each prompt. Untick anything that's
+                        no longer relevant - useful for trimming an oversized history. Each section can
+                        also generate a single AI-written summary that you can substitute for the full set.
+                        Changes are saved when you press <em>Save</em>.
                     </p>
                 </div>
                 <div className="memory-tweak-actions">
@@ -186,7 +224,9 @@ export default function MemoryTweakingTab({ project, onError, onProjectChanged }
             </header>
 
             <section className="memory-tweak-section">
-                <h2 className="memory-tweak-section-title">Project preamble</h2>
+                <div className="memory-tweak-section-header">
+                    <h2 className="memory-tweak-section-title">Project preamble</h2>
+                </div>
                 <ul className="memory-tweak-list">
                     <li className="memory-tweak-row">
                         <label className="memory-tweak-label">
@@ -196,7 +236,7 @@ export default function MemoryTweakingTab({ project, onError, onProjectChanged }
                                 onChange={(e) => setFlag('includeProjectInfo', e.target.checked)}
                             />
                             <span className="memory-tweak-name">Project name + working directory</span>
-                            <span className="memory-tweak-detail">{project.name} · {project.workingDirectory}</span>
+                            <span className="memory-tweak-detail">{project.name}{project.workingDirectory ? ` · ${project.workingDirectory}` : ''}</span>
                         </label>
                     </li>
                     <li className="memory-tweak-row">
@@ -212,6 +252,32 @@ export default function MemoryTweakingTab({ project, onError, onProjectChanged }
                         </label>
                     </li>
                 </ul>
+            </section>
+
+            <section className="memory-tweak-section">
+                <div className="memory-tweak-section-header">
+                    <h2 className="memory-tweak-section-title">Project description</h2>
+                    <button
+                        type="button"
+                        className="btn btn-ghost btn-small"
+                        onClick={() => generateSummary('projectDescription')}
+                        disabled={generating !== null || !project.description}
+                        title={!project.description ? 'Add a description on the project page first' : 'Generate a compressed summary'}
+                    >
+                        {generating === 'projectDescription' ? 'Asking the AI…' : 'Generate summary'}
+                    </button>
+                </div>
+                {!project.description && (
+                    <p className="empty-state subtle no-pad">No project description yet.</p>
+                )}
+                {project.description && (
+                    <p className="memory-tweak-detail" style={{ marginLeft: 0 }}>{summarise(project.description, 200)}</p>
+                )}
+                <SummaryRow
+                    section="projectDescription"
+                    summary={summaryFor('projectDescription')}
+                    onToggle={(included) => setSummaryIncluded('projectDescription', included)}
+                />
             </section>
 
             <CheckboxGroup
@@ -234,6 +300,10 @@ export default function MemoryTweakingTab({ project, onError, onProjectChanged }
                 onToggle={(id, on) => setIncluded('clientKnowledge', id, on)}
                 onCheckAll={(on) => checkAll('clientKnowledge', clientKnowledge, on)}
                 empty={client ? 'No client knowledge yet.' : 'No client attached.'}
+                summary={summaryFor('clientKnowledge')}
+                onGenerateSummary={() => generateSummary('clientKnowledge')}
+                onToggleSummary={(on) => setSummaryIncluded('clientKnowledge', on)}
+                generatingSummary={generating === 'clientKnowledge'}
             />
 
             <CheckboxGroup
@@ -245,6 +315,10 @@ export default function MemoryTweakingTab({ project, onError, onProjectChanged }
                 onToggle={(id, on) => setIncluded('projectKnowledge', id, on)}
                 onCheckAll={(on) => checkAll('projectKnowledge', projectKnowledge, on)}
                 empty="No project knowledge yet."
+                summary={summaryFor('projectKnowledge')}
+                onGenerateSummary={() => generateSummary('projectKnowledge')}
+                onToggleSummary={(on) => setSummaryIncluded('projectKnowledge', on)}
+                generatingSummary={generating === 'projectKnowledge'}
             />
 
             <CheckboxGroup
@@ -256,6 +330,10 @@ export default function MemoryTweakingTab({ project, onError, onProjectChanged }
                 onToggle={(id, on) => setIncluded('tickets', id, on)}
                 onCheckAll={(on) => checkAll('tickets', tickets, on)}
                 empty="No tickets."
+                summary={summaryFor('tickets')}
+                onGenerateSummary={() => generateSummary('tickets')}
+                onToggleSummary={(on) => setSummaryIncluded('tickets', on)}
+                generatingSummary={generating === 'tickets'}
             />
 
             <CheckboxGroup
@@ -265,18 +343,55 @@ export default function MemoryTweakingTab({ project, onError, onProjectChanged }
                 renderName={(m) => summarise(m.message, 90)}
                 renderDetail={(m) => {
                     const when = formatTimestamp(m.messageAt);
-                    const summary = summarise(m.response, 60);
-                    return summary ? `${when} · → ${summary}` : when;
+                    const summaryText = summarise(m.response, 60);
+                    return summaryText ? `${when} · → ${summaryText}` : when;
                 }}
                 onToggle={(id, on) => setIncluded('conversation', id, on)}
                 onCheckAll={(on) => checkAll('conversation', conversation, on)}
                 empty="No completed conversation turns yet."
+                summary={summaryFor('conversation')}
+                onGenerateSummary={() => generateSummary('conversation')}
+                onToggleSummary={(on) => setSummaryIncluded('conversation', on)}
+                generatingSummary={generating === 'conversation'}
             />
         </div>
     );
 }
 
-function CheckboxGroup({ title, items, excluded, renderName, renderDetail, onToggle, onCheckAll, empty }) {
+function SummaryRow({ section, summary, onToggle }) {
+    if (!summary) return null;
+    const label = `Summary of '${SECTION_LABELS[section] ?? section}' generated at ${formatTimestamp(summary.generatedAt)}`;
+    return (
+        <ul className="memory-tweak-list">
+            <li className="memory-tweak-row memory-tweak-summary-row">
+                <label className="memory-tweak-label">
+                    <input
+                        type="checkbox"
+                        checked={!!summary.included}
+                        onChange={(e) => onToggle(e.target.checked)}
+                    />
+                    <span className="memory-tweak-name">{label}</span>
+                    <span className="memory-tweak-detail">{summarise(summary.body, 220)}</span>
+                </label>
+            </li>
+        </ul>
+    );
+}
+
+function CheckboxGroup({
+    title,
+    items,
+    excluded,
+    renderName,
+    renderDetail,
+    onToggle,
+    onCheckAll,
+    empty,
+    summary,
+    onGenerateSummary,
+    onToggleSummary,
+    generatingSummary
+}) {
     const excludedSet = new Set(excluded);
     const includedCount = items.filter((i) => !excludedSet.has(i.id)).length;
 
@@ -293,6 +408,17 @@ function CheckboxGroup({ title, items, excluded, renderName, renderDetail, onTog
                         <span aria-hidden="true">·</span>
                         <button type="button" className="btn-link" onClick={() => onCheckAll(false)}>None</button>
                     </div>
+                )}
+                {onGenerateSummary && (
+                    <button
+                        type="button"
+                        className="btn btn-ghost btn-small"
+                        onClick={onGenerateSummary}
+                        disabled={generatingSummary || items.length === 0}
+                        title={items.length === 0 ? 'Nothing to summarise' : 'Generate a compressed summary'}
+                    >
+                        {generatingSummary ? 'Asking the AI…' : 'Generate summary'}
+                    </button>
                 )}
             </div>
             {items.length === 0 && (
@@ -318,8 +444,21 @@ function CheckboxGroup({ title, items, excluded, renderName, renderDetail, onTog
                     })}
                 </ul>
             )}
+            {onToggleSummary && (
+                <SummaryRow section={sectionForTitle(title)} summary={summary} onToggle={onToggleSummary} />
+            )}
         </section>
     );
+}
+
+function sectionForTitle(title) {
+    switch (title) {
+        case 'Client knowledge': return 'clientKnowledge';
+        case 'Project knowledge': return 'projectKnowledge';
+        case 'Tickets': return 'tickets';
+        case 'Conversation': return 'conversation';
+        default: return title;
+    }
 }
 
 function excludedKey(kind) {
@@ -341,6 +480,7 @@ function defaultSelection() {
         excludedTicketIds: [],
         excludedProjectKnowledgeIds: [],
         excludedClientKnowledgeIds: [],
-        excludedConversationJobIds: []
+        excludedConversationJobIds: [],
+        sectionSummaries: {}
     };
 }

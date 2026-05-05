@@ -1541,7 +1541,15 @@ public sealed class JsonClaudeDataProvider : IClaudeDataProvider
         ExcludedTicketIds = new List<Guid>(selection.ExcludedTicketIds),
         ExcludedProjectKnowledgeIds = new List<Guid>(selection.ExcludedProjectKnowledgeIds),
         ExcludedClientKnowledgeIds = new List<Guid>(selection.ExcludedClientKnowledgeIds),
-        ExcludedConversationJobIds = new List<Guid>(selection.ExcludedConversationJobIds)
+        ExcludedConversationJobIds = new List<Guid>(selection.ExcludedConversationJobIds),
+        SectionSummaries = selection.SectionSummaries.ToDictionary(
+            kvp => kvp.Key,
+            kvp => new MemorySectionSummary
+            {
+                Body = kvp.Value.Body,
+                GeneratedAt = kvp.Value.GeneratedAt,
+                Included = kvp.Value.Included
+            })
     };
 
     private static Agent Clone(Agent agent) => new()

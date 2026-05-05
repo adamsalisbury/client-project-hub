@@ -100,7 +100,7 @@ export default function AddAgentDialog({ projectId, onCreate, onCancel }) {
                         <textarea
                             id="agent-personality"
                             className="text-input ticket-body-input"
-                            placeholder="Describe the agent's tone, focus areas, what they care about - Claude will turn this into a fuller characteristics body."
+                            placeholder="Describe the agent's tone, focus areas, what they care about - the AI will turn this into a fuller characteristics body."
                             value={personality}
                             onChange={(e) => setPersonality(e.target.value)}
                             disabled={busy}
@@ -113,7 +113,7 @@ export default function AddAgentDialog({ projectId, onCreate, onCancel }) {
                                 onClick={runGeneration}
                                 disabled={busy || !title.trim() || !personality.trim()}
                             >
-                                {generating ? 'Asking Claude…' : 'Generate characteristics'}
+                                {generating ? 'Asking the AI…' : 'Generate characteristics'}
                             </button>
                         </div>
                     </>

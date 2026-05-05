@@ -60,6 +60,7 @@ builder.Services.AddSingleton<IRepoAnalysisService, RepoAnalysisService>();
 builder.Services.AddSingleton<IPlanService, PlanService>();
 builder.Services.AddSingleton<IStepReviewService, StepReviewService>();
 builder.Services.AddSingleton<ISettingsService, SettingsService>();
+builder.Services.AddSingleton<IMemorySummaryService, MemorySummaryService>();
 
 builder.WebHost.ConfigureKestrel(options =>
 {

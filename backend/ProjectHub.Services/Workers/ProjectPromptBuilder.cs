@@ -106,9 +106,11 @@ public static class ProjectPromptBuilder
     {
         return (context.IncludeProjectInfo && (!string.IsNullOrWhiteSpace(context.ProjectName) || !string.IsNullOrWhiteSpace(context.WorkingDirectory)))
             || (context.IncludeClientInfo && !string.IsNullOrWhiteSpace(context.ClientName))
+            || !string.IsNullOrWhiteSpace(context.ProjectDescription)
             || context.ClientKnowledge.Count > 0
             || context.ProjectKnowledge.Count > 0
-            || context.Tickets.Count > 0;
+            || context.Tickets.Count > 0
+            || (context.IncludedSectionSummaries is not null && context.IncludedSectionSummaries.Count > 0);
     }
 
     private static void AppendAgents(StringBuilder sb, IReadOnlyList<Agent> agents)
@@ -145,7 +147,21 @@ public static class ProjectPromptBuilder
         }
         sb.AppendLine();
 
-        if (context.ClientKnowledge.Count > 0)
+        var summaries = context.IncludedSectionSummaries;
+
+        if (!string.IsNullOrWhiteSpace(context.ProjectDescription) || HasSummary(summaries, "projectDescription"))
+        {
+            sb.AppendLine("--- project description ---");
+            if (!string.IsNullOrWhiteSpace(context.ProjectDescription))
+            {
+                sb.AppendLine(context.ProjectDescription);
+            }
+            AppendSummary(sb, summaries, "projectDescription");
+            sb.AppendLine("--- end of project description ---");
+            sb.AppendLine();
+        }
+
+        if (context.ClientKnowledge.Count > 0 || HasSummary(summaries, "clientKnowledge"))
         {
             sb.AppendLine("--- client knowledge ---");
             foreach (var entry in context.ClientKnowledge)
@@ -154,12 +170,13 @@ public static class ProjectPromptBuilder
                 sb.Append("### ").AppendLine(entry.Title);
                 sb.AppendLine(entry.Body);
             }
+            AppendSummary(sb, summaries, "clientKnowledge");
             sb.AppendLine();
             sb.AppendLine("--- end of client knowledge ---");
             sb.AppendLine();
         }
 
-        if (context.ProjectKnowledge.Count > 0)
+        if (context.ProjectKnowledge.Count > 0 || HasSummary(summaries, "projectKnowledge"))
         {
             sb.AppendLine("--- project knowledge ---");
             foreach (var entry in context.ProjectKnowledge)
@@ -168,12 +185,13 @@ public static class ProjectPromptBuilder
                 sb.Append("### ").AppendLine(entry.Title);
                 sb.AppendLine(entry.Body);
             }
+            AppendSummary(sb, summaries, "projectKnowledge");
             sb.AppendLine();
             sb.AppendLine("--- end of project knowledge ---");
             sb.AppendLine();
         }
 
-        if (context.Tickets.Count > 0)
+        if (context.Tickets.Count > 0 || HasSummary(summaries, "tickets"))
         {
             sb.AppendLine("--- tickets ---");
             foreach (var ticket in context.Tickets)
@@ -182,6 +200,7 @@ public static class ProjectPromptBuilder
                 sb.Append("Ticket ").Append(ticket.Code).Append(": ").AppendLine(ticket.Title);
                 sb.AppendLine(ticket.Body);
             }
+            AppendSummary(sb, summaries, "tickets");
             sb.AppendLine();
             sb.AppendLine("--- end of tickets ---");
             sb.AppendLine();
@@ -189,5 +208,16 @@ public static class ProjectPromptBuilder
 
         sb.AppendLine("--- end of project context ---");
         sb.AppendLine();
+    }
+
+    private static bool HasSummary(IReadOnlyDictionary<string, string>? summaries, string key)
+        => summaries is not null && summaries.TryGetValue(key, out var s) && !string.IsNullOrWhiteSpace(s);
+
+    private static void AppendSummary(StringBuilder sb, IReadOnlyDictionary<string, string>? summaries, string key)
+    {
+        if (!HasSummary(summaries, key)) return;
+        sb.AppendLine();
+        sb.AppendLine("[summary]");
+        sb.AppendLine(summaries![key]);
     }
 }

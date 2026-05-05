@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
-import InfoTab from './InfoTab.jsx';
 import FilesTab from './FilesTab.jsx';
 import ChatTab from './ChatTab.jsx';
 import FileTab from './FileTab.jsx';
@@ -40,8 +39,8 @@ export default function SubTabHost({
     const [tickets, setTickets] = useState([]);
     const pollRef = useRef(null);
 
-    const wantsHistory = subKind === 'chat' || subKind === 'diagnostics' || subKind === 'info';
-    const wantsTickets = subKind === 'chat' || subKind === 'info' || subKind === 'ticket';
+    const wantsHistory = subKind === 'chat' || subKind === 'diagnostics';
+    const wantsTickets = subKind === 'chat' || subKind === 'ticket';
 
     const loadHistory = useCallback(async () => {
         if (!project) return null;
@@ -115,23 +114,6 @@ export default function SubTabHost({
     }
 
     switch (subKind) {
-        case 'info':
-            return (
-                <InfoTab
-                    project={project}
-                    tickets={tickets}
-                    openTicket={openTicket}
-                    openProjectKnowledge={openProjectKnowledge}
-                    openClientKnowledge={openClientKnowledge}
-                    openProjectKnowledgeById={openProjectKnowledge}
-                    openClientKnowledgeById={openClientKnowledge}
-                    openAgents={openAgents}
-                    openAgent={openAgent}
-                    openMemoryTweak={openMemoryTweak}
-                    onProjectChanged={onProjectChanged}
-                    onError={onError}
-                />
-            );
         case 'files':
             return (
                 <FilesTab

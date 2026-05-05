@@ -225,6 +225,10 @@ public sealed class ClaudeJobWorker(
                 .ToList();
         }
 
+        var includedSummaries = selection.SectionSummaries
+            .Where(kvp => kvp.Value.Included && !string.IsNullOrWhiteSpace(kvp.Value.Body))
+            .ToDictionary(kvp => kvp.Key, kvp => kvp.Value.Body);
+
         return new PromptContext(
             IncludeProjectInfo: selection.IncludeProjectInfo,
             ProjectName: project.Name,
@@ -235,7 +239,9 @@ public sealed class ClaudeJobWorker(
             ProjectKnowledge: projectKnowledge,
             Tickets: tickets,
             Agents: agents,
-            AiName: settings.AiName);
+            AiName: settings.AiName,
+            IncludedSectionSummaries: includedSummaries.Count > 0 ? includedSummaries : null,
+            ProjectDescription: selection.IncludeProjectInfo ? project.Description : null);
     }
 
     private async Task<IReadOnlyList<ConversationTurn>> BuildPriorTurnsAsync(ClaudeJob currentJob, ClaudeProject project, CancellationToken cancellationToken)

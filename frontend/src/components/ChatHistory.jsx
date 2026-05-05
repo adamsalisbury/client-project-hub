@@ -93,7 +93,7 @@ function AssistantMessage({ message }) {
                     <div className="chat-bubble-body subtle">Queued. Waiting for the worker.</div>
                 )}
                 {message.status === 'Processing' && (
-                    <div className="chat-bubble-body subtle">Running through Claude.</div>
+                    <div className="chat-bubble-body subtle">Running through the AI.</div>
                 )}
                 {message.status === 'Completed' && (
                     <div className="chat-bubble-body">{message.response || ''}</div>

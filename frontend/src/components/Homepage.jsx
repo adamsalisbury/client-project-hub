@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-export default function Homepage({ clients, projects, onPickClient, onPickProject, onNewClient, onNewProject }) {
+export default function Homepage({ clients, projects, onPickClient, onPickProject, onNewClient, onNewProject, onOpenSettings }) {
     const projectsByClient = useMemo(() => {
         const map = new Map();
         for (const project of projects) {
@@ -43,6 +43,16 @@ export default function Homepage({ clients, projects, onPickClient, onPickProjec
                         <span aria-hidden="true">＋</span>
                         <span>New project</span>
                     </button>
+                    {onOpenSettings && (
+                        <button
+                            type="button"
+                            className="btn btn-ghost homepage-cta"
+                            onClick={onOpenSettings}
+                        >
+                            <span aria-hidden="true">⚙</span>
+                            <span>Settings</span>
+                        </button>
+                    )}
                 </div>
 
                 {clients.length === 0 && (
@@ -83,10 +93,14 @@ export default function Homepage({ clients, projects, onPickClient, onPickProjec
                                                         type="button"
                                                         className="client-project-item"
                                                         onClick={() => onPickProject(p.id)}
-                                                        title={p.workingDirectory}
+                                                        title={p.workingDirectory ?? 'No repo assigned'}
                                                     >
                                                         <span className="client-project-name">{p.name}</span>
-                                                        <code className="client-project-cwd">{p.workingDirectory}</code>
+                                                        {p.workingDirectory ? (
+                                                            <code className="client-project-cwd">{p.workingDirectory}</code>
+                                                        ) : (
+                                                            <span className="client-project-cwd subtle">no repo</span>
+                                                        )}
                                                     </button>
                                                 </li>
                                             ))}

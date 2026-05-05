@@ -122,7 +122,7 @@ export default function NewTicketDialog({ projectId, onCreate, onCancel }) {
                     <div className="ticket-screenshots">
                         <p className="modal-help">
                             Upload up to {MAX_FILES} screenshots (PNG, JPG, WebP, GIF; max 10 MB each).
-                            Claude will read them and extract the ticket fields.
+                            The AI will read them and extract the ticket fields.
                         </p>
                         <input
                             ref={fileInputRef}
@@ -156,7 +156,7 @@ export default function NewTicketDialog({ projectId, onCreate, onCancel }) {
                                 onClick={runExtraction}
                                 disabled={busy || files.length === 0}
                             >
-                                {extracting ? 'Asking Claude…' : 'Extract'}
+                                {extracting ? 'Asking the AI…' : 'Extract'}
                             </button>
                         </div>
                     </div>

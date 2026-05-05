@@ -74,7 +74,7 @@ export default function AgentsTab({ project, openAgent, onError }) {
                 )}
                 {!loading && agents.length === 0 && (
                     <p className="empty-state subtle">
-                        No agents yet. Add one to give Claude a persona on each prompt.
+                        No agents yet. Add one to give the AI a persona on each prompt.
                     </p>
                 )}
                 {agents.length > 0 && (

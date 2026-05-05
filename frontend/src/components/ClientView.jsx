@@ -2,11 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api.js';
 import ColourPicker from './ColourPicker.jsx';
 import PathBrowser from './PathBrowser.jsx';
+import AddKnowledgeDialog from './AddKnowledgeDialog.jsx';
 
 /**
  * The "client tab" body. Shows the client's projects, registered repos,
- * client knowledge, and a colour picker for the tab tint that propagates to
- * every nested project / sub tab.
+ * client knowledge (with add / delete), and a colour picker for the tab tint.
  */
 export default function ClientView({
     clientId,
@@ -25,23 +25,18 @@ export default function ClientView({
     const [repoPath, setRepoPath] = useState('');
     const [repoBrowserOpen, setRepoBrowserOpen] = useState(false);
     const [savingRepo, setSavingRepo] = useState(false);
+    const [showAddKnowledge, setShowAddKnowledge] = useState(false);
 
     const loadRepos = useCallback(async () => {
         if (!clientId) return;
-        try {
-            setRepos((await api.listClientRepos(clientId)) ?? []);
-        } catch (err) {
-            onError?.(err.message);
-        }
+        try { setRepos((await api.listClientRepos(clientId)) ?? []); }
+        catch (err) { onError?.(err.message); }
     }, [clientId, onError]);
 
     const loadKnowledge = useCallback(async () => {
         if (!clientId) return;
-        try {
-            setKnowledge((await api.listClientKnowledge(clientId)) ?? []);
-        } catch (err) {
-            onError?.(err.message);
-        }
+        try { setKnowledge((await api.listClientKnowledge(clientId)) ?? []); }
+        catch (err) { onError?.(err.message); }
     }, [clientId, onError]);
 
     useEffect(() => { loadRepos(); loadKnowledge(); }, [loadRepos, loadKnowledge]);
@@ -83,15 +78,35 @@ export default function ClientView({
         }
     };
 
+    const handleCreateKnowledge = async (entry) => {
+        try {
+            await api.createClientKnowledge(clientId, entry);
+            setShowAddKnowledge(false);
+            await loadKnowledge();
+        } catch (err) {
+            onError?.(err.message);
+        }
+    };
+
+    const handleDeleteKnowledge = async (id) => {
+        if (!window.confirm('Delete this knowledge entry?')) return;
+        try {
+            await api.deleteClientKnowledge(clientId, id);
+            await loadKnowledge();
+        } catch (err) {
+            onError?.(err.message);
+        }
+    };
+
     if (!client) {
         return <div className="workspace-empty">Loading client…</div>;
     }
 
     return (
         <div className="client-view">
-            <header className="client-view-header" style={{ '--client-colour': client.colour }}>
+            <header className="page-title-row client-view-header" style={{ '--client-colour': client.colour }}>
                 <div className="client-view-identity">
-                    <h1 className="client-view-name">{client.name}</h1>
+                    <h1 className="page-title">Client — {client.name}</h1>
                     <span className="client-view-id">{client.id.slice(0, 8)}</span>
                 </div>
                 <div className="client-view-colour">
@@ -114,10 +129,14 @@ export default function ClientView({
                                     type="button"
                                     className="client-project-item"
                                     onClick={() => onOpenProject(p.id)}
-                                    title={p.workingDirectory}
+                                    title={p.workingDirectory ?? 'No repo assigned'}
                                 >
                                     <span className="client-project-name">{p.name}</span>
-                                    <code className="client-project-cwd">{p.workingDirectory}</code>
+                                    {p.workingDirectory ? (
+                                        <code className="client-project-cwd">{p.workingDirectory}</code>
+                                    ) : (
+                                        <span className="client-project-cwd subtle">no repo</span>
+                                    )}
                                 </button>
                             </li>
                         ))}
@@ -206,6 +225,11 @@ export default function ClientView({
             <section className="client-view-section">
                 <header className="client-view-section-head">
                     <h2>Client knowledge</h2>
+                    <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() => setShowAddKnowledge(true)}
+                    >＋ Add</button>
                 </header>
                 {knowledge.length === 0 && <p className="empty-state subtle">No knowledge entries yet.</p>}
                 {knowledge.length > 0 && (
@@ -213,11 +237,25 @@ export default function ClientView({
                         {knowledge.map((k) => (
                             <li key={k.id} className="knowledge-list-item">
                                 <span className="knowledge-list-title">{k.title}</span>
+                                <button
+                                    type="button"
+                                    className="info-list-delete"
+                                    onClick={() => handleDeleteKnowledge(k.id)}
+                                    aria-label={`Delete ${k.title}`}
+                                    title="Delete"
+                                >×</button>
                             </li>
                         ))}
                     </ul>
                 )}
             </section>
+
+            {showAddKnowledge && (
+                <AddKnowledgeDialog
+                    onCreate={handleCreateKnowledge}
+                    onCancel={() => setShowAddKnowledge(false)}
+                />
+            )}
         </div>
     );
 }

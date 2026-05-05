@@ -30,7 +30,7 @@ export default function DiagnosticsTab({ message }) {
             <header className="diagnostics-header">
                 <h1 className="document-tab-title">Diagnostics</h1>
                 <p className="modal-help">
-                    Everything that was sent to Claude Code for this message — the
+                    Everything that was sent to the AI for this message — the
                     fully rendered prompt including agent personas, project context,
                     prior conversation turns, and the user message itself.
                 </p>
@@ -68,11 +68,11 @@ export default function DiagnosticsTab({ message }) {
             </section>
 
             <section className="diagnostics-section">
-                <h2 className="diagnostics-section-title">Full prompt sent to Claude</h2>
+                <h2 className="diagnostics-section-title">Full prompt sent to the AI</h2>
                 {promptMissing && (
                     <p className="empty-state subtle no-pad">
                         This job is still queued — the prompt is rendered just
-                        before Claude is invoked.
+                        before the AI is invoked.
                     </p>
                 )}
                 {promptUnavailable && (
@@ -88,7 +88,7 @@ export default function DiagnosticsTab({ message }) {
 
             {message.response && (
                 <section className="diagnostics-section">
-                    <h2 className="diagnostics-section-title">Claude's response</h2>
+                    <h2 className="diagnostics-section-title">AI response</h2>
                     <pre className="diagnostics-pre">{message.response}</pre>
                 </section>
             )}
