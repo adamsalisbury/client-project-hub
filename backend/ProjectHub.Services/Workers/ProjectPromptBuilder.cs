@@ -15,7 +15,11 @@ public static class ProjectPromptBuilder
     /// with <see cref="PromptContext.Empty"/>.
     /// </summary>
     public static string Build(IReadOnlyList<ConversationTurn> priorTurns, string newMessage)
-        => Build(priorTurns, newMessage, PromptContext.Empty);
+        => Build(priorTurns, newMessage, PromptContext.Empty, MessageKind.Chat);
+
+    /// <summary>Backwards-compatible overload that defaults to <see cref="MessageKind.Chat"/>.</summary>
+    public static string Build(IReadOnlyList<ConversationTurn> priorTurns, string newMessage, PromptContext context)
+        => Build(priorTurns, newMessage, context, MessageKind.Chat);
 
     /// <summary>
     /// Builds the prompt to send to Claude, including any agent persona
@@ -27,7 +31,12 @@ public static class ProjectPromptBuilder
     /// </param>
     /// <param name="newMessage">The new user message to respond to.</param>
     /// <param name="context">Project-level context to include before the history.</param>
-    public static string Build(IReadOnlyList<ConversationTurn> priorTurns, string newMessage, PromptContext context)
+    /// <param name="kind">
+    /// Caller intent. When <see cref="MessageKind.Chat"/>, the prompt is
+    /// prefixed with an instruction telling the AI to refuse file edits and
+    /// direct the user to plan execution instead.
+    /// </param>
+    public static string Build(IReadOnlyList<ConversationTurn> priorTurns, string newMessage, PromptContext context, MessageKind kind)
     {
         ArgumentNullException.ThrowIfNull(priorTurns);
         ArgumentNullException.ThrowIfNull(context);
@@ -35,12 +44,18 @@ public static class ProjectPromptBuilder
 
         var hasAgents = context.Agents.Count > 0;
         var hasOtherContext = HasNonAgentContext(context);
-        if (!hasAgents && !hasOtherContext && priorTurns.Count == 0)
+        var injectChatInstruction = kind == MessageKind.Chat;
+        if (!hasAgents && !hasOtherContext && !injectChatInstruction && priorTurns.Count == 0)
         {
             return newMessage;
         }
 
         var sb = new StringBuilder();
+
+        if (injectChatInstruction)
+        {
+            AppendChatInstruction(sb, context.AiName);
+        }
 
         if (hasAgents)
         {
@@ -75,6 +90,18 @@ public static class ProjectPromptBuilder
 
         sb.Append(newMessage);
         return sb.ToString();
+    }
+
+    private static void AppendChatInstruction(StringBuilder sb, string? aiName)
+    {
+        if (!string.IsNullOrWhiteSpace(aiName))
+        {
+            sb.Append("Your name is ").Append(aiName).AppendLine(".");
+        }
+        sb.AppendLine("This message is in chat mode. You must not modify, create, or delete any files in this conversation.");
+        sb.AppendLine("If the user asks you to make code or file changes, refuse and explain that all code modification");
+        sb.AppendLine("happens through plan execution - they should add a plan step on the Plan tab and run it from there.");
+        sb.AppendLine();
     }
 
     private static bool HasNonAgentContext(PromptContext context)

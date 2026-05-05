@@ -621,8 +621,8 @@ body.dragging-splitter {
     display: grid;
     grid-template-columns: 1fr auto;
     grid-template-areas:
-        "kind kind"
-        "textarea submit";
+        "textarea textarea"
+        ".        submit";
     gap: 0.5rem;
     padding: 0.75rem 1.5rem;
     border-top: 1px solid var(--border);
@@ -684,7 +684,12 @@ body.dragging-splitter {
     outline-offset: 1px;
 }
 
-.composer-submit { grid-area: submit; min-width: 5.5rem; }
+.composer-submit {
+    grid-area: submit;
+    min-width: 5.5rem;
+    justify-self: end;
+    align-self: start;
+}
 
 /* ---------- buttons ---------- */
 .btn {

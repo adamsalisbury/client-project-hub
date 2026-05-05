@@ -17,7 +17,8 @@ public sealed record PromptContext(
     IReadOnlyList<KnowledgeEntry> ClientKnowledge,
     IReadOnlyList<KnowledgeEntry> ProjectKnowledge,
     IReadOnlyList<Ticket> Tickets,
-    IReadOnlyList<Agent> Agents)
+    IReadOnlyList<Agent> Agents,
+    string? AiName = null)
 {
     public static PromptContext Empty { get; } = new(
         IncludeProjectInfo: false,
@@ -28,5 +29,6 @@ public sealed record PromptContext(
         ClientKnowledge: Array.Empty<KnowledgeEntry>(),
         ProjectKnowledge: Array.Empty<KnowledgeEntry>(),
         Tickets: Array.Empty<Ticket>(),
-        Agents: Array.Empty<Agent>());
+        Agents: Array.Empty<Agent>(),
+        AiName: null);
 }

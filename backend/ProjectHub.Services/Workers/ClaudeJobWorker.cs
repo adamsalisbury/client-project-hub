@@ -74,7 +74,7 @@ public sealed class ClaudeJobWorker(
 
         var priorTurns = await BuildPriorTurnsAsync(job, project, cancellationToken);
         var context = await BuildPromptContextAsync(project, cancellationToken);
-        var prompt = ProjectPromptBuilder.Build(priorTurns, job.Message, context);
+        var prompt = ProjectPromptBuilder.Build(priorTurns, job.Message, context, job.Kind);
 
         // Capture the rendered prompt on the job before we hand it to the
         // CLI, so the diagnostics view can show exactly what was sent even
