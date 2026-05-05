@@ -2368,7 +2368,8 @@ body.dragging-splitter {
     border-top-color: var(--tab-strip-colour);
 }
 
-.ws-tab-home {
+.ws-tab-home,
+.ws-tab-home.active {
     border-top-color: var(--accent);
 }
 

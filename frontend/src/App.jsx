@@ -172,17 +172,17 @@ export default function App() {
     }, [projects]);
 
     const labelFor = useCallback((tab) => {
-        if (tab.kind === 'home') return 'Home';
+        if (tab.kind === 'home') return 'home';
         if (tab.kind === 'client') {
             const c = clientById.get(tab.payload.clientId);
-            return `client | ${c?.name ?? tab.payload.clientId.slice(0, 6)}`;
+            return `client (${c?.name ?? tab.payload.clientId.slice(0, 6)})`;
         }
         if (tab.kind === 'project') {
             const p = projectById.get(tab.payload.projectId);
             const c = p ? clientById.get(p.clientId) : null;
             const cn = c?.name ?? '…';
             const pn = p?.name ?? tab.payload.projectId.slice(0, 6);
-            return `project | ${cn} | ${pn}`;
+            return `project (${cn}|${pn})`;
         }
         // sub
         const p = projectById.get(tab.payload.projectId);
@@ -194,7 +194,7 @@ export default function App() {
         if (sub === 'file' || sub === 'diff') {
             piece = `${SUB_KIND_LABEL[sub]} ${(tab.payload.path || '').split('/').pop()}`;
         }
-        return `${cn} | ${pn} | ${piece}`;
+        return `${piece} (${cn}|${pn})`;
     }, [clientById, projectById]);
 
     const colourFor = useCallback((tab) => {
