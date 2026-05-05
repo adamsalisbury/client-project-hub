@@ -6,17 +6,15 @@ namespace ProjectHub.Services;
 public interface IProjectService
 {
     /// <summary>
-    /// Creates a project. Either <paramref name="repoId"/> or
-    /// <paramref name="workingDirectory"/> must be provided. When a
-    /// <paramref name="repoId"/> is supplied, the path is taken from that
-    /// client repo and validated; otherwise <paramref name="workingDirectory"/>
-    /// is registered as a new client repo on the project's client.
+    /// Creates a project. <paramref name="repoId"/> is optional; when null
+    /// the project starts with no working directory and code-touching
+    /// operations (chat, files, plan) are blocked until a repo is assigned
+    /// via <see cref="AssignRepoAsync"/>.
     /// </summary>
     Task<ClaudeProject> CreateAsync(
         string name,
         Guid clientId,
         Guid? repoId,
-        string? workingDirectory,
         string? description,
         Guid? ticketId,
         CancellationToken cancellationToken);

@@ -1,10 +1,11 @@
 namespace ProjectHub.Domain.Models;
 
 /// <summary>
-/// A grouping of related Claude Code jobs whose full message history is
-/// passed back into Claude on each new request, all run from a single
-/// pinned working directory. Every project belongs to a client and may be
-/// linked to one of that client's registered repos.
+/// A grouping of related AI jobs whose full message history is
+/// passed back to the AI on each new request. Every project belongs to a
+/// client and may be linked to one of that client's registered repos. The
+/// working directory is derived from that repo; a project with no repo has
+/// no working directory and cannot run code-touching operations.
 /// </summary>
 public sealed class ClaudeProject
 {
@@ -13,12 +14,13 @@ public sealed class ClaudeProject
     public required string Name { get; init; }
 
     /// <summary>
-    /// Absolute filesystem path used as the working directory for every
-    /// Claude Code invocation in this project. When <see cref="RepoId"/> is
-    /// set this mirrors the path of the linked client repo and is updated
-    /// in lockstep when the repo is renamed or repointed.
+    /// Absolute filesystem path used as the working directory for every AI
+    /// invocation in this project. Mirrors the path of <see cref="RepoId"/>
+    /// when one is assigned; <see langword="null"/> when the project has no
+    /// repo. Operations requiring a working directory (chat, files, plan)
+    /// fail with a clear error in that case.
     /// </summary>
-    public required string WorkingDirectory { get; set; }
+    public string? WorkingDirectory { get; set; }
 
     public required DateTimeOffset CreatedAt { get; init; }
 

@@ -36,3 +36,22 @@ public sealed class UnprocessableException : ServiceException
         Detail = detail;
     }
 }
+
+/// <summary>Helpers for translating model state into service-layer errors.</summary>
+public static class ProjectGuards
+{
+    /// <summary>
+    /// Returns the project's working directory, or throws <see cref="ValidationException"/>
+    /// when the project has no repo assigned.
+    /// </summary>
+    public static string RequireWorkingDirectory(this Domain.Models.ClaudeProject project)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        if (string.IsNullOrWhiteSpace(project.WorkingDirectory))
+        {
+            throw new ValidationException(
+                "This project has no repo assigned. Add a repo on the project page before running this action.");
+        }
+        return project.WorkingDirectory;
+    }
+}

@@ -1,24 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
-import PathBrowser from './PathBrowser.jsx';
 
 const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'];
 const MAX_FILES = 10;
 const MAX_BYTES = 10 * 1024 * 1024;
 const NEW_CLIENT = '__new__';
+const NO_REPO = '';
 
 export default function NewProjectWizard({ clients, onComplete, onCancel, onClientsChanged }) {
     const [step, setStep] = useState(1);
 
     const [name, setName] = useState('');
-    const [workingDirectory, setWorkingDirectory] = useState(null);
-    const [showBrowser, setShowBrowser] = useState(false);
 
     const [clientPick, setClientPick] = useState(clients?.[0]?.id ?? '');
     const [newClientName, setNewClientName] = useState('');
 
-    // Once we've created the project early (to enable screenshot extraction)
-    // we hold the new project in state to attach the ticket to it.
+    const [repos, setRepos] = useState([]);
+    const [repoPick, setRepoPick] = useState(NO_REPO);
+
     const [createdProject, setCreatedProject] = useState(null);
 
     const [addTicket, setAddTicket] = useState(null);
@@ -33,6 +32,28 @@ export default function NewProjectWizard({ clients, onComplete, onCancel, onClie
 
     const nameRef = useRef(null);
     useEffect(() => { if (step === 1) nameRef.current?.focus(); }, [step]);
+
+    useEffect(() => {
+        let cancelled = false;
+        async function load() {
+            if (clientPick === NEW_CLIENT || !clientPick) {
+                if (!cancelled) setRepos([]);
+                if (!cancelled) setRepoPick(NO_REPO);
+                return;
+            }
+            try {
+                const list = (await api.listClientRepos(clientPick)) ?? [];
+                if (!cancelled) {
+                    setRepos(list);
+                    setRepoPick((cur) => list.some((r) => r.id === cur) ? cur : NO_REPO);
+                }
+            } catch (err) {
+                if (!cancelled) setError(err?.message || String(err));
+            }
+        }
+        load();
+        return () => { cancelled = true; };
+    }, [clientPick]);
 
     const resolveClientId = async () => {
         if (clientPick === NEW_CLIENT) {
@@ -56,8 +77,7 @@ export default function NewProjectWizard({ clients, onComplete, onCancel, onClie
         const project = await api.createProject({
             name: name.trim(),
             clientId,
-            workingDirectory,
-            repoId: null,
+            repoId: repoPick || null,
             description: null,
             ticketId: null
         });
@@ -68,7 +88,6 @@ export default function NewProjectWizard({ clients, onComplete, onCancel, onClie
     const goToTicketStep = () => {
         const trimmed = name.trim();
         if (!trimmed) { setError('Please enter a name.'); return; }
-        if (!workingDirectory) { setError('Please pick a working directory.'); return; }
         if (clientPick === NEW_CLIENT && !newClientName.trim()) {
             setError('Give the new client a name.');
             return;
@@ -164,9 +183,9 @@ export default function NewProjectWizard({ clients, onComplete, onCancel, onClie
                     <>
                         <h2 className="modal-title">New project</h2>
                         <p className="modal-help">
-                            Pick a folder on the API host. It must already be a git
-                            repository - every Claude command in this project runs
-                            from there.
+                            Pick a client. Optionally link one of the client's
+                            registered repos; you can also do this later from
+                            the project page.
                         </p>
 
                         <label className="field-label" htmlFor="wizard-client">Client</label>
@@ -206,34 +225,35 @@ export default function NewProjectWizard({ clients, onComplete, onCancel, onClie
                             ref={nameRef}
                             type="text"
                             className="text-input"
-                            placeholder="e.g. Refactor planning"
+                            placeholder="e.g. code-refactor"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             disabled={projectFieldsLocked}
                             maxLength={120}
                         />
 
-                        <label className="field-label">Working directory</label>
-                        <div className="working-dir-row">
-                            <code className="working-dir-display">
-                                {workingDirectory || <span className="placeholder">No folder selected</span>}
-                            </code>
-                            <button
-                                type="button"
-                                className="btn btn-ghost"
-                                onClick={() => setShowBrowser((v) => !v)}
-                                disabled={projectFieldsLocked}
-                            >
-                                {showBrowser ? 'Hide browser' : 'Browse…'}
-                            </button>
-                        </div>
-
-                        {showBrowser && (
-                            <PathBrowser
-                                initialPath={workingDirectory}
-                                onSelect={(path) => { setWorkingDirectory(path); setShowBrowser(false); }}
-                                onCancel={() => setShowBrowser(false)}
-                            />
+                        {clientPick && clientPick !== NEW_CLIENT && (
+                            <>
+                                <label className="field-label" htmlFor="wizard-repo">Repo (optional)</label>
+                                <select
+                                    id="wizard-repo"
+                                    className="project-select"
+                                    value={repoPick}
+                                    onChange={(e) => setRepoPick(e.target.value)}
+                                    disabled={projectFieldsLocked}
+                                >
+                                    <option value={NO_REPO}>— No repo —</option>
+                                    {repos.map((r) => (
+                                        <option key={r.id} value={r.id}>{r.name} — {r.path}</option>
+                                    ))}
+                                </select>
+                                {repos.length === 0 && (
+                                    <p className="modal-help">
+                                        No repos registered against this client yet. You can add one
+                                        from the client page and link it later.
+                                    </p>
+                                )}
+                            </>
                         )}
 
                         {error && <div className="modal-error">{error}</div>}
@@ -244,7 +264,7 @@ export default function NewProjectWizard({ clients, onComplete, onCancel, onClie
                                 type="button"
                                 className="btn btn-primary"
                                 onClick={goToTicketStep}
-                                disabled={busy || !name.trim() || !workingDirectory || !clientPick || (clientPick === NEW_CLIENT && !newClientName.trim())}
+                                disabled={busy || !name.trim() || !clientPick || (clientPick === NEW_CLIENT && !newClientName.trim())}
                             >
                                 Next →
                             </button>
@@ -256,7 +276,7 @@ export default function NewProjectWizard({ clients, onComplete, onCancel, onClie
                     <>
                         <h2 className="modal-title">Add a ticket?</h2>
                         <p className="modal-help">
-                            Optional. You can attach a starter ticket so Claude knows
+                            Optional. You can attach a starter ticket so the AI knows
                             what you're working on. Skip this step to land in the
                             project view immediately.
                         </p>
@@ -312,7 +332,7 @@ export default function NewProjectWizard({ clients, onComplete, onCancel, onClie
                                 {ticketMode === 'screenshots' && (
                                     <div className="ticket-screenshots">
                                         <p className="modal-help">
-                                            Upload up to {MAX_FILES} screenshots; Claude will read them
+                                            Upload up to {MAX_FILES} screenshots; the AI will read them
                                             and fill in the ticket fields below.
                                         </p>
                                         <input
@@ -346,7 +366,7 @@ export default function NewProjectWizard({ clients, onComplete, onCancel, onClie
                                                 onClick={runExtraction}
                                                 disabled={busy || files.length === 0}
                                             >
-                                                {busy ? 'Asking Claude…' : 'Extract'}
+                                                {busy ? 'Asking the AI…' : 'Extract'}
                                             </button>
                                         </div>
                                     </div>

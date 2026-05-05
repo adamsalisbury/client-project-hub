@@ -79,7 +79,7 @@ public sealed class AgentService(
         var prompt = BuildGenerationPrompt(title, personality);
         logger.LogInformation("Generating agent characteristics for '{Title}' in project {ProjectId}", title, projectId);
 
-        var result = await runner.RunAsync(prompt, project.WorkingDirectory, MessageKind.Chat, cancellationToken);
+        var result = await runner.RunAsync(prompt, project.WorkingDirectory ?? Path.GetTempPath(), MessageKind.Chat, cancellationToken);
         if (result.ExitCode != 0)
         {
             logger.LogWarning("Claude exited with {ExitCode} during agent generation", result.ExitCode);

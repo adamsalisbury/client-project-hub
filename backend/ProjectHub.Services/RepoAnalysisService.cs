@@ -24,12 +24,13 @@ public sealed class RepoAnalysisService(
                 ?? throw new NotFoundException($"No client found with id {project.ClientId}.");
         }
 
-        var prompt = BuildPrompt(project, client);
+        var cwd = project.RequireWorkingDirectory();
+        var prompt = BuildPrompt(project, client, cwd);
         logger.LogInformation(
             "Running repo analysis for project {ProjectId} (target: {Target})",
             projectId, target);
 
-        var result = await runner.RunAsync(prompt, project.WorkingDirectory, MessageKind.Chat, cancellationToken);
+        var result = await runner.RunAsync(prompt, cwd, MessageKind.Chat, cancellationToken);
         if (result.ExitCode != 0)
         {
             logger.LogWarning("Claude exited with {ExitCode} during repo analysis", result.ExitCode);
@@ -57,7 +58,7 @@ public sealed class RepoAnalysisService(
             : $"Repo analysis ({stamp})";
     }
 
-    private static string BuildPrompt(ClaudeProject project, ProjectClient? client)
+    private static string BuildPrompt(ClaudeProject project, ProjectClient? client, string workingDirectory)
     {
         var sb = new StringBuilder();
         sb.AppendLine("You are auditing a code repository so that future prompts have a structured");
@@ -72,7 +73,7 @@ public sealed class RepoAnalysisService(
             sb.AppendLine("readers know which repo this section is about:");
             sb.AppendLine();
             sb.Append("- Repo name: ").AppendLine(project.Name);
-            sb.Append("- Working directory: ").AppendLine(project.WorkingDirectory);
+            sb.Append("- Working directory: ").AppendLine(workingDirectory);
             sb.AppendLine();
         }
         else

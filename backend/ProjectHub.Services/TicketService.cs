@@ -110,7 +110,7 @@ public sealed class TicketService(
                 "Extracting ticket from {Count} screenshot(s) for project {ProjectId} (temp: {TempDir})",
                 savedPaths.Count, projectId, tempDir);
 
-            var result = await runner.RunAsync(prompt, project.WorkingDirectory, MessageKind.Chat, cancellationToken);
+            var result = await runner.RunAsync(prompt, project.WorkingDirectory ?? Path.GetTempPath(), MessageKind.Chat, cancellationToken);
 
             if (result.ExitCode != 0)
             {

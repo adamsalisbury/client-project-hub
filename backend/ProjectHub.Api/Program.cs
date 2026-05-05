@@ -59,6 +59,7 @@ builder.Services.AddSingleton<IClaudeJobService, ClaudeJobService>();
 builder.Services.AddSingleton<IRepoAnalysisService, RepoAnalysisService>();
 builder.Services.AddSingleton<IPlanService, PlanService>();
 builder.Services.AddSingleton<IStepReviewService, StepReviewService>();
+builder.Services.AddSingleton<ISettingsService, SettingsService>();
 
 builder.WebHost.ConfigureKestrel(options =>
 {
@@ -80,7 +81,8 @@ app.Use(async (context, next) =>
     var path = context.Request.Path.Value ?? string.Empty;
     if (HttpMethods.IsGet(context.Request.Method) &&
         (path == "/" || path.Equals("/index.html", StringComparison.OrdinalIgnoreCase) ||
-         (!path.StartsWith("/api", StringComparison.OrdinalIgnoreCase) && !Path.HasExtension(path))))
+         path.StartsWith("/api", StringComparison.OrdinalIgnoreCase) ||
+         !Path.HasExtension(path)))
     {
         var antiforgery = context.RequestServices.GetRequiredService<IAntiforgery>();
         var tokens = antiforgery.GetAndStoreTokens(context);

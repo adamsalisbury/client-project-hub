@@ -10,19 +10,17 @@ namespace ProjectHub.Services.Storage;
 public interface IClaudeDataProvider
 {
     /// <summary>
-    /// Creates a new project under a client.
+    /// Creates a new project under a client. The project starts with no repo
+    /// link and no working directory; call <see cref="AssignProjectRepoAsync"/>
+    /// to attach one.
     /// </summary>
     /// <param name="name">Human-readable name for the project.</param>
-    /// <param name="workingDirectory">
-    /// Absolute filesystem path used as the working directory for every
-    /// Claude Code invocation in this project.
-    /// </param>
     /// <param name="clientId">The client this project belongs to. Must already exist.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <exception cref="InvalidOperationException">
     /// Thrown when the supplied <paramref name="clientId"/> does not exist.
     /// </exception>
-    Task<ClaudeProject> CreateProjectAsync(string name, string workingDirectory, Guid clientId, CancellationToken cancellationToken = default);
+    Task<ClaudeProject> CreateProjectAsync(string name, Guid clientId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Retrieves a project by its identifier.
@@ -205,14 +203,13 @@ public interface IClaudeDataProvider
 
     /// <summary>
     /// Updates the editable fields of a project (description, primary ticket
-    /// pointer, working directory). Only non-null arguments are written.
+    /// pointer). Only non-null arguments are written.
     /// </summary>
     /// <returns>The updated project, or <see langword="null"/> if not found.</returns>
     Task<ClaudeProject?> UpdateProjectAsync(
         Guid projectId,
         string? description = null,
         Guid? ticketId = null,
-        string? workingDirectory = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -296,4 +293,10 @@ public interface IClaudeDataProvider
 
     /// <summary>Lists every review owned by a project, newest first.</summary>
     Task<IReadOnlyList<StepReview>> ListStepReviewsByProjectAsync(Guid projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>Returns the persisted application settings (always non-null).</summary>
+    Task<AppSettings> GetSettingsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Replaces the persisted application settings.</summary>
+    Task<AppSettings> UpdateSettingsAsync(AppSettings settings, CancellationToken cancellationToken = default);
 }

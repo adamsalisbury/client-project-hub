@@ -22,7 +22,6 @@ public sealed class ProjectsController(IProjectService projects) : ControllerBas
             request.Name,
             request.ClientId,
             request.RepoId,
-            request.WorkingDirectory,
             request.Description,
             request.TicketId,
             cancellationToken);

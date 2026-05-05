@@ -82,21 +82,32 @@ public sealed class ClaudeJobWorker(
         job.Prompt = prompt;
         await dataProvider.UpdateJobAsync(job, cancellationToken);
 
+        if (string.IsNullOrWhiteSpace(project.WorkingDirectory))
+        {
+            logger.LogWarning("Job {JobId} cannot run because project {ProjectId} has no repo assigned", jobId, job.ProjectId);
+            job.Status = JobStatus.Failed;
+            job.Error = "This project has no repo assigned. Add a repo on the project page before running this action.";
+            job.CompletedAt = DateTimeOffset.UtcNow;
+            await dataProvider.UpdateJobAsync(job, cancellationToken);
+            return;
+        }
+        var workingDirectory = project.WorkingDirectory;
+
         logger.LogInformation(
             "Processing {Kind} job {JobId} in project {ProjectId} (cwd: {WorkingDirectory}) with {TurnCount} prior turn(s)",
             job.Kind,
             jobId,
             job.ProjectId,
-            project.WorkingDirectory,
+            workingDirectory,
             priorTurns.Count);
 
-        var beforeSnapshot = _fileChangeDetector.Snapshot(project.WorkingDirectory);
+        var beforeSnapshot = _fileChangeDetector.Snapshot(workingDirectory);
         ClaudeResponse? result = null;
         Exception? failure = null;
 
         try
         {
-            result = await runner.RunAsync(prompt, project.WorkingDirectory, job.Kind, cancellationToken);
+            result = await runner.RunAsync(prompt, workingDirectory, job.Kind, cancellationToken);
         }
         catch (TimeoutException ex)
         {
@@ -109,7 +120,7 @@ public sealed class ClaudeJobWorker(
             logger.LogError(ex, "Job {JobId} failed during CLI invocation", jobId);
         }
 
-        var afterSnapshot = _fileChangeDetector.Snapshot(project.WorkingDirectory);
+        var afterSnapshot = _fileChangeDetector.Snapshot(workingDirectory);
         job.FilesChanged = _fileChangeDetector.Diff(beforeSnapshot, afterSnapshot);
         job.CompletedAt = DateTimeOffset.UtcNow;
 
@@ -191,6 +202,8 @@ public sealed class ClaudeJobWorker(
         var excludedClientKnowledge = selection.ExcludedClientKnowledgeIds.ToHashSet();
         var excludedAgents = selection.ExcludedAgentIds.ToHashSet();
 
+        var settings = await dataProvider.GetSettingsAsync(cancellationToken);
+
         var tickets = (await dataProvider.ListTicketsByProjectAsync(project.Id, cancellationToken))
             .Where(t => !excludedTickets.Contains(t.Id))
             .ToList();
@@ -215,13 +228,14 @@ public sealed class ClaudeJobWorker(
         return new PromptContext(
             IncludeProjectInfo: selection.IncludeProjectInfo,
             ProjectName: project.Name,
-            WorkingDirectory: project.WorkingDirectory,
+            WorkingDirectory: project.WorkingDirectory ?? string.Empty,
             IncludeClientInfo: selection.IncludeClientInfo,
             ClientName: clientName,
             ClientKnowledge: clientKnowledge,
             ProjectKnowledge: projectKnowledge,
             Tickets: tickets,
-            Agents: agents);
+            Agents: agents,
+            AiName: settings.AiName);
     }
 
     private async Task<IReadOnlyList<ConversationTurn>> BuildPriorTurnsAsync(ClaudeJob currentJob, ClaudeProject project, CancellationToken cancellationToken)

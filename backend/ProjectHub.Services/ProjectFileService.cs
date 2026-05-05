@@ -16,7 +16,7 @@ public sealed class ProjectFileService(IClaudeDataProvider data, ILogger<Project
         var project = await data.GetProjectAsync(projectId, cancellationToken)
             ?? throw new NotFoundException($"No project found with id {projectId}.");
 
-        if (!ProjectPathResolver.TryResolve(project.WorkingDirectory, path, out var resolved, out var error))
+        if (!ProjectPathResolver.TryResolve(project.RequireWorkingDirectory(), path, out var resolved, out var error))
         {
             throw new ValidationException(error);
         }
@@ -48,7 +48,7 @@ public sealed class ProjectFileService(IClaudeDataProvider data, ILogger<Project
             }
             entries.Add(new ProjectFileEntry(
                 Name: name,
-                RelativePath: ProjectPathResolver.ToRelative(project.WorkingDirectory, dir),
+                RelativePath: ProjectPathResolver.ToRelative(project.RequireWorkingDirectory(), dir),
                 IsDirectory: true,
                 Size: null));
         }
@@ -65,15 +65,15 @@ public sealed class ProjectFileService(IClaudeDataProvider data, ILogger<Project
 
             entries.Add(new ProjectFileEntry(
                 Name: name,
-                RelativePath: ProjectPathResolver.ToRelative(project.WorkingDirectory, file),
+                RelativePath: ProjectPathResolver.ToRelative(project.RequireWorkingDirectory(), file),
                 IsDirectory: false,
                 Size: size));
         }
 
-        var relative = ProjectPathResolver.ToRelative(project.WorkingDirectory, resolved);
+        var relative = ProjectPathResolver.ToRelative(project.RequireWorkingDirectory(), resolved);
         var parent = relative.Length == 0
             ? null
-            : ProjectPathResolver.ToRelative(project.WorkingDirectory, Path.GetDirectoryName(resolved)!);
+            : ProjectPathResolver.ToRelative(project.RequireWorkingDirectory(), Path.GetDirectoryName(resolved)!);
 
         return new ProjectFileListing(relative, parent, entries);
     }
@@ -89,7 +89,7 @@ public sealed class ProjectFileService(IClaudeDataProvider data, ILogger<Project
         var project = await data.GetProjectAsync(projectId, cancellationToken)
             ?? throw new NotFoundException($"No project found with id {projectId}.");
 
-        if (!ProjectPathResolver.TryResolve(project.WorkingDirectory, path, out var resolved, out var error))
+        if (!ProjectPathResolver.TryResolve(project.RequireWorkingDirectory(), path, out var resolved, out var error))
         {
             throw new ValidationException(error);
         }
@@ -110,7 +110,7 @@ public sealed class ProjectFileService(IClaudeDataProvider data, ILogger<Project
             throw new UnprocessableException(ex.Message);
         }
 
-        var relative = ProjectPathResolver.ToRelative(project.WorkingDirectory, resolved);
+        var relative = ProjectPathResolver.ToRelative(project.RequireWorkingDirectory(), resolved);
 
         if (size > MaxFileSizeBytes)
         {

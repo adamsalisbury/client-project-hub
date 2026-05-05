@@ -18,13 +18,13 @@ public sealed class ProjectGitService(IClaudeDataProvider data, ILogger<ProjectG
         var (project, relative, resolved) = await ResolveAsync(projectId, path, cancellationToken);
 
         var statusResult = await RunGitAsync(
-            project.WorkingDirectory,
+            project.RequireWorkingDirectory(),
             ["status", "--porcelain", "--", relative],
             cancellationToken);
 
         if (statusResult.ExitCode != 0)
         {
-            logger.LogWarning("git status failed in {Cwd}: {Stderr}", project.WorkingDirectory, statusResult.StdErr);
+            logger.LogWarning("git status failed in {Cwd}: {Stderr}", project.RequireWorkingDirectory(), statusResult.StdErr);
             throw new UnprocessableException("git status failed.", statusResult.StdErr);
         }
 
@@ -48,13 +48,13 @@ public sealed class ProjectGitService(IClaudeDataProvider data, ILogger<ProjectG
         }
 
         var diffResult = await RunGitAsync(
-            project.WorkingDirectory,
+            project.RequireWorkingDirectory(),
             ["diff", "HEAD", "--no-color", "--", relative],
             cancellationToken);
 
         if (diffResult.ExitCode != 0)
         {
-            logger.LogWarning("git diff failed in {Cwd}: {Stderr}", project.WorkingDirectory, diffResult.StdErr);
+            logger.LogWarning("git diff failed in {Cwd}: {Stderr}", project.RequireWorkingDirectory(), diffResult.StdErr);
             throw new UnprocessableException("git diff failed.", diffResult.StdErr);
         }
 
@@ -70,13 +70,13 @@ public sealed class ProjectGitService(IClaudeDataProvider data, ILogger<ProjectG
         const string Format = "%H%x09%h%x09%an%x09%ae%x09%aI%x09%s%x1f";
 
         var logResult = await RunGitAsync(
-            project.WorkingDirectory,
+            project.RequireWorkingDirectory(),
             ["log", $"-n{HistoryLimit}", $"--pretty=format:{Format}", "--", relative],
             cancellationToken);
 
         if (logResult.ExitCode != 0)
         {
-            logger.LogWarning("git log failed in {Cwd}: {Stderr}", project.WorkingDirectory, logResult.StdErr);
+            logger.LogWarning("git log failed in {Cwd}: {Stderr}", project.RequireWorkingDirectory(), logResult.StdErr);
             throw new UnprocessableException("git log failed.", logResult.StdErr);
         }
 
@@ -119,11 +119,11 @@ public sealed class ProjectGitService(IClaudeDataProvider data, ILogger<ProjectG
         var project = await data.GetProjectAsync(projectId, cancellationToken)
             ?? throw new NotFoundException($"No project found with id {projectId}.");
 
-        if (!ProjectPathResolver.TryResolve(project.WorkingDirectory, path, out var resolved, out var error))
+        if (!ProjectPathResolver.TryResolve(project.RequireWorkingDirectory(), path, out var resolved, out var error))
         {
             throw new ValidationException(error);
         }
-        var relative = ProjectPathResolver.ToRelative(project.WorkingDirectory, resolved);
+        var relative = ProjectPathResolver.ToRelative(project.RequireWorkingDirectory(), resolved);
         if (string.IsNullOrEmpty(relative))
         {
             throw new ValidationException("Cannot operate on the project root.");

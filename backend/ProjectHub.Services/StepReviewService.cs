@@ -34,18 +34,19 @@ public sealed class StepReviewService(IClaudeDataProvider data, ILogger<StepRevi
             throw new ValidationException($"File '{relative}' has already been resolved.");
         }
 
+        var cwd = project.RequireWorkingDirectory();
         var commitMessage = string.IsNullOrWhiteSpace(message)
             ? $"step {review.StepId} — {relative}"
             : message;
 
-        var addResult = await RunGitAsync(project.WorkingDirectory, ["add", "--", relative], cancellationToken);
+        var addResult = await RunGitAsync(cwd, ["add", "--", relative], cancellationToken);
         if (addResult.ExitCode != 0)
         {
             throw new UnprocessableException("git add failed.", addResult.StdErr);
         }
 
         var commitResult = await RunGitAsync(
-            project.WorkingDirectory,
+            cwd,
             ["commit", "--only", "--", relative, "-m", commitMessage],
             cancellationToken);
         if (commitResult.ExitCode != 0)
@@ -68,7 +69,8 @@ public sealed class StepReviewService(IClaudeDataProvider data, ILogger<StepRevi
             throw new ValidationException($"File '{relative}' has already been resolved.");
         }
 
-        var status = await RunGitAsync(project.WorkingDirectory, ["status", "--porcelain", "--", relative], cancellationToken);
+        var cwd = project.RequireWorkingDirectory();
+        var status = await RunGitAsync(cwd, ["status", "--porcelain", "--", relative], cancellationToken);
         if (status.ExitCode != 0)
         {
             throw new UnprocessableException("git status failed.", status.StdErr);
@@ -78,7 +80,7 @@ public sealed class StepReviewService(IClaudeDataProvider data, ILogger<StepRevi
         if (line.StartsWith("??", StringComparison.Ordinal))
         {
             // Untracked: just delete the file.
-            var absolute = Path.Combine(project.WorkingDirectory, relative);
+            var absolute = Path.Combine(cwd, relative);
             if (File.Exists(absolute))
             {
                 File.Delete(absolute);
@@ -86,7 +88,7 @@ public sealed class StepReviewService(IClaudeDataProvider data, ILogger<StepRevi
         }
         else
         {
-            var checkout = await RunGitAsync(project.WorkingDirectory, ["checkout", "HEAD", "--", relative], cancellationToken);
+            var checkout = await RunGitAsync(cwd, ["checkout", "HEAD", "--", relative], cancellationToken);
             if (checkout.ExitCode != 0)
             {
                 throw new UnprocessableException("git checkout failed.", checkout.StdErr);
@@ -110,11 +112,12 @@ public sealed class StepReviewService(IClaudeDataProvider data, ILogger<StepRevi
         var project = await data.GetProjectAsync(review.ProjectId, cancellationToken)
             ?? throw new NotFoundException($"Project {review.ProjectId} for review {reviewId} no longer exists.");
 
-        if (!ProjectPathResolver.TryResolve(project.WorkingDirectory, path, out var resolved, out var error))
+        var cwd = project.RequireWorkingDirectory();
+        if (!ProjectPathResolver.TryResolve(cwd, path, out var resolved, out var error))
         {
             throw new ValidationException(error);
         }
-        var relative = ProjectPathResolver.ToRelative(project.WorkingDirectory, resolved);
+        var relative = ProjectPathResolver.ToRelative(cwd, resolved);
         if (string.IsNullOrEmpty(relative))
         {
             throw new ValidationException("Cannot operate on the project root.");

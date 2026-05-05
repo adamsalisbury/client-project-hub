@@ -6,7 +6,7 @@ namespace ProjectHub.Domain.Models;
 public sealed record ClaudeProjectResponse(
     Guid Id,
     string Name,
-    string WorkingDirectory,
+    string? WorkingDirectory,
     DateTimeOffset CreatedAt,
     Guid ClientId,
     Guid? RepoId,

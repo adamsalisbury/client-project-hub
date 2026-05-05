@@ -10,16 +10,14 @@ namespace ProjectHub.Services.Workers;
 public static class ProjectPromptBuilder
 {
     /// <summary>
-    /// Builds a prompt with no project context. Equivalent to
-    /// <see cref="Build(IReadOnlyList{ConversationTurn}, string, PromptContext)"/>
-    /// with <see cref="PromptContext.Empty"/>.
+    /// Builds a prompt with no project context and no chat-mode instruction.
     /// </summary>
     public static string Build(IReadOnlyList<ConversationTurn> priorTurns, string newMessage)
-        => Build(priorTurns, newMessage, PromptContext.Empty, MessageKind.Chat);
+        => Build(priorTurns, newMessage, PromptContext.Empty, MessageKind.Edit);
 
-    /// <summary>Backwards-compatible overload that defaults to <see cref="MessageKind.Chat"/>.</summary>
+    /// <summary>Backwards-compatible overload with no chat-mode instruction.</summary>
     public static string Build(IReadOnlyList<ConversationTurn> priorTurns, string newMessage, PromptContext context)
-        => Build(priorTurns, newMessage, context, MessageKind.Chat);
+        => Build(priorTurns, newMessage, context, MessageKind.Edit);
 
     /// <summary>
     /// Builds the prompt to send to Claude, including any agent persona

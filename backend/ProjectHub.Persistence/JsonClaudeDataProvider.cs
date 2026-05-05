@@ -38,6 +38,7 @@ public sealed class JsonClaudeDataProvider : IClaudeDataProvider
     private readonly Dictionary<Guid, Plan> _plans = new();
     private readonly Dictionary<Guid, PlanStep> _planSteps = new();
     private readonly Dictionary<Guid, StepReview> _stepReviews = new();
+    private AppSettings _settings = new();
     private bool _initialized;
 
     public JsonClaudeDataProvider(
@@ -58,10 +59,9 @@ public sealed class JsonClaudeDataProvider : IClaudeDataProvider
     }
 
     /// <inheritdoc/>
-    public async Task<ClaudeProject> CreateProjectAsync(string name, string workingDirectory, Guid clientId, CancellationToken cancellationToken = default)
+    public async Task<ClaudeProject> CreateProjectAsync(string name, Guid clientId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
 
         await _lock.WaitAsync(cancellationToken);
         try
@@ -77,7 +77,7 @@ public sealed class JsonClaudeDataProvider : IClaudeDataProvider
             {
                 Id = Guid.NewGuid(),
                 Name = name.Trim(),
-                WorkingDirectory = workingDirectory,
+                WorkingDirectory = null,
                 ClientId = clientId,
                 CreatedAt = DateTimeOffset.UtcNow
             };
@@ -745,7 +745,6 @@ public sealed class JsonClaudeDataProvider : IClaudeDataProvider
         Guid projectId,
         string? description = null,
         Guid? ticketId = null,
-        string? workingDirectory = null,
         CancellationToken cancellationToken = default)
     {
         await _lock.WaitAsync(cancellationToken);
@@ -764,10 +763,6 @@ public sealed class JsonClaudeDataProvider : IClaudeDataProvider
             if (ticketId is not null)
             {
                 project.TicketId = ticketId == Guid.Empty ? null : ticketId;
-            }
-            if (workingDirectory is not null)
-            {
-                project.WorkingDirectory = workingDirectory;
             }
 
             await PersistAsync(cancellationToken);
@@ -1270,6 +1265,45 @@ public sealed class JsonClaudeDataProvider : IClaudeDataProvider
         }
     }
 
+    /// <inheritdoc/>
+    public async Task<AppSettings> GetSettingsAsync(CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureLoadedAsync(cancellationToken);
+            return Clone(_settings);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<AppSettings> UpdateSettingsAsync(AppSettings settings, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        await _lock.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureLoadedAsync(cancellationToken);
+            _settings = Clone(settings);
+            await PersistAsync(cancellationToken);
+            return Clone(_settings);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    private static AppSettings Clone(AppSettings settings) => new()
+    {
+        AiName = settings.AiName
+    };
+
     private async Task EnsureLoadedAsync(CancellationToken cancellationToken)
     {
         if (_initialized)
@@ -1351,6 +1385,8 @@ public sealed class JsonClaudeDataProvider : IClaudeDataProvider
                     {
                         _stepReviews[id] = review;
                     }
+
+                    _settings = snapshot.Settings ?? new AppSettings();
                 }
 
                 // Backfill default memory selection for any projects loaded
@@ -1384,9 +1420,10 @@ public sealed class JsonClaudeDataProvider : IClaudeDataProvider
                 // legacy data.
                 foreach (var project in _projects.Values.Where(p => p.RepoId is null && !string.IsNullOrWhiteSpace(p.WorkingDirectory)))
                 {
+                    var workingDirectory = project.WorkingDirectory!;
                     var existing = _clientRepos.Values.FirstOrDefault(r =>
                         r.ClientId == project.ClientId &&
-                        string.Equals(r.Path, project.WorkingDirectory, StringComparison.Ordinal));
+                        string.Equals(r.Path, workingDirectory, StringComparison.Ordinal));
 
                     if (existing is not null)
                     {
@@ -1398,8 +1435,8 @@ public sealed class JsonClaudeDataProvider : IClaudeDataProvider
                         {
                             Id = Guid.NewGuid(),
                             ClientId = project.ClientId,
-                            Name = DeriveRepoName(project.WorkingDirectory),
-                            Path = project.WorkingDirectory,
+                            Name = DeriveRepoName(workingDirectory),
+                            Path = workingDirectory,
                             CreatedAt = DateTimeOffset.UtcNow
                         };
                         _clientRepos[repo.Id] = repo;
@@ -1469,7 +1506,8 @@ public sealed class JsonClaudeDataProvider : IClaudeDataProvider
             ClientRepos = new Dictionary<Guid, ClientRepo>(_clientRepos),
             Plans = new Dictionary<Guid, Plan>(_plans),
             PlanSteps = new Dictionary<Guid, PlanStep>(_planSteps),
-            StepReviews = new Dictionary<Guid, StepReview>(_stepReviews)
+            StepReviews = new Dictionary<Guid, StepReview>(_stepReviews),
+            Settings = Clone(_settings)
         };
 
         var tempPath = _filePath + ".tmp";

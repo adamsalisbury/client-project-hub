@@ -38,7 +38,9 @@ public sealed class JsonClaudeDataProviderTests : IDisposable
     private static async Task<ClaudeProject> CreateProjectAsync(JsonClaudeDataProvider provider, string name, string workingDirectory)
     {
         var client = await provider.CreateClientAsync($"client-{name}-{Guid.NewGuid():N}");
-        return await provider.CreateProjectAsync(name, workingDirectory, client.Id);
+        var repo = await provider.CreateClientRepoAsync(client.Id, name, workingDirectory);
+        var project = await provider.CreateProjectAsync(name, client.Id);
+        return await provider.AssignProjectRepoAsync(project.Id, repo.Id) ?? project;
     }
 
     [Fact]
@@ -66,15 +68,7 @@ public sealed class JsonClaudeDataProviderTests : IDisposable
     {
         var provider = CreateProvider();
 
-        await Assert.ThrowsAsync<ArgumentException>(() => provider.CreateProjectAsync("   ", _workingDir, Guid.NewGuid()));
-    }
-
-    [Fact]
-    public async Task CreateProject_WithBlankWorkingDirectory_Throws()
-    {
-        var provider = CreateProvider();
-
-        await Assert.ThrowsAsync<ArgumentException>(() => provider.CreateProjectAsync("name", "   ", Guid.NewGuid()));
+        await Assert.ThrowsAsync<ArgumentException>(() => provider.CreateProjectAsync("   ", Guid.NewGuid()));
     }
 
     [Fact]
@@ -83,7 +77,7 @@ public sealed class JsonClaudeDataProviderTests : IDisposable
         var provider = CreateProvider();
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            provider.CreateProjectAsync("name", _workingDir, Guid.NewGuid()));
+            provider.CreateProjectAsync("name", Guid.NewGuid()));
     }
 
     [Fact]

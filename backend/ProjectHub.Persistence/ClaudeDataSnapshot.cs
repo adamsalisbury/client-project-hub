@@ -28,4 +28,6 @@ internal sealed class ClaudeDataSnapshot
     public Dictionary<Guid, PlanStep> PlanSteps { get; init; } = new();
 
     public Dictionary<Guid, StepReview> StepReviews { get; init; } = new();
+
+    public AppSettings Settings { get; set; } = new();
 }
