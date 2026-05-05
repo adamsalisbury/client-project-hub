@@ -21,19 +21,23 @@ so the storage layer can be swapped (for example, for SQL) later.
 ## Layout
 
 ```
-src/
-  ProjectHub.Domain/        Domain models + DTOs (no dependencies)
-  ProjectHub.Persistence/   JSON-backed IClaudeDataProvider
-  ProjectHub.Services/      Service layer + background worker
-    Runner/                 IClaudeRunner (subprocess invoker)
-    Workers/                ClaudeJobWorker · ProjectPromptBuilder
-    Storage/                IClaudeDataProvider · queue
-  ProjectHub.Api/           .NET 10 web app - API + SPA host
-    Controllers/            api/clients · api/projects · api/claude · …
-    ClientApp/              Vite + React 18 SPA
-    wwwroot/                SPA build output
-tests/
-  ProjectHub.Tests/         xUnit
+backend/                          .NET 10 backend
+  ProjectHub.Domain/              Domain models + DTOs (no dependencies)
+  ProjectHub.Persistence/         JSON-backed IClaudeDataProvider
+  ProjectHub.Services/            Service layer + background worker
+    Runner/                       IClaudeRunner (subprocess invoker)
+    Workers/                      ClaudeJobWorker · ProjectPromptBuilder
+    Storage/                      IClaudeDataProvider · queue
+  ProjectHub.Api/                 Web app - controllers + SPA host
+    Controllers/                  api/clients · api/projects · api/claude · …
+    wwwroot/                      SPA build output (gitignored)
+  tests/
+    ProjectHub.Tests/             xUnit
+frontend/                         React 18 + Vite SPA (project root)
+  src/                            components, router, api client
+  public/
+ProjectHub.slnx                   solution file across the .NET projects
+Dockerfile                        multi-stage: builds frontend, then backend
 ```
 
 ## Endpoints
@@ -59,15 +63,34 @@ Mutating endpoints require an antiforgery token. The SPA reads the
 
 ## Running
 
+The simplest way — let the API project's MSBuild target invoke the
+frontend build for you:
+
 ```bash
-dotnet run --project src/ProjectHub.Api
+dotnet run --project backend/ProjectHub.Api
 ```
 
-Default URL is `http://0.0.0.0:5090`. The React client lives in
-`src/ProjectHub.Api/ClientApp`; build it once with:
+That runs `npm install` (if `frontend/node_modules` is missing) and
+`npm run build` against `frontend/`, which writes the bundle into
+`backend/ProjectHub.Api/wwwroot/`. Default URL is `http://0.0.0.0:5090`.
+
+To skip the implicit frontend build (e.g. when you've built it manually or
+are iterating with `vite dev`):
 
 ```bash
-cd src/ProjectHub.Api/ClientApp && npm install && npm run build
+dotnet run --project backend/ProjectHub.Api /p:SkipClientBuild=true
+```
+
+For frontend-focused work, run Vite's dev server with proxying to the API:
+
+```bash
+# terminal 1 - the .NET API
+dotnet run --project backend/ProjectHub.Api /p:SkipClientBuild=true
+
+# terminal 2 - the Vite dev server with HMR (proxies /api → :5090)
+cd frontend
+npm install      # first time only
+npm run dev
 ```
 
 The Claude Code CLI must be on `PATH` and authenticated. The wrapper invokes
@@ -77,6 +100,13 @@ it with `--dangerously-skip-permissions` so no interactive approval is required.
 
 ```bash
 dotnet test
+```
+
+## Docker
+
+```bash
+docker build -t project-hub .
+docker run --rm -p 5090:5090 -v $PWD/data:/app/data project-hub
 ```
 
 ## Licence

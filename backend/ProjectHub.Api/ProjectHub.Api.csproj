@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>ProjectHub.Api</RootNamespace>
-    <ClientAppDir>$(MSBuildProjectDirectory)/ClientApp</ClientAppDir>
+    <ClientAppDir>$(MSBuildProjectDirectory)/../../frontend</ClientAppDir>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,12 +16,6 @@
     <ProjectReference Include="..\ProjectHub.Domain\ProjectHub.Domain.csproj" />
     <ProjectReference Include="..\ProjectHub.Services\ProjectHub.Services.csproj" />
     <ProjectReference Include="..\ProjectHub.Persistence\ProjectHub.Persistence.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Remove="ClientApp/node_modules/**" />
-    <Content Remove="ClientApp/node_modules/**" />
-    <Compile Remove="ClientApp/**" />
   </ItemGroup>
 
   <Target Name="EnsureNodeAvailable" BeforeTargets="BuildClientApp" Condition="'$(SkipClientBuild)' != 'true'">

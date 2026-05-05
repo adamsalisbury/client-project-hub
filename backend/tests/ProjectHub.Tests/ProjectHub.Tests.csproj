@@ -17,9 +17,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\ProjectHub.Domain\ProjectHub.Domain.csproj" />
-    <ProjectReference Include="..\..\src\ProjectHub.Services\ProjectHub.Services.csproj" />
-    <ProjectReference Include="..\..\src\ProjectHub.Persistence\ProjectHub.Persistence.csproj" />
+    <ProjectReference Include="..\..\ProjectHub.Domain\ProjectHub.Domain.csproj" />
+    <ProjectReference Include="..\..\ProjectHub.Services\ProjectHub.Services.csproj" />
+    <ProjectReference Include="..\..\ProjectHub.Persistence\ProjectHub.Persistence.csproj" />
   </ItemGroup>
 
   <ItemGroup>

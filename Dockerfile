@@ -1,40 +1,41 @@
-# Multi-stage Dockerfile that builds the React client + .NET API
+# Multi-stage Dockerfile that builds the React frontend + .NET backend
 # and runs them as a single container serving the SPA + API on $PORT (default 5090).
 
-# ---------- Stage 1: build the React client ----------
-FROM node:22-alpine AS client-build
-WORKDIR /src/ClientApp
-COPY src/ProjectHub.Api/ClientApp/package.json src/ProjectHub.Api/ClientApp/package-lock.json* ./
+# ---------- Stage 1: build the React frontend ----------
+FROM node:22-alpine AS frontend-build
+WORKDIR /src/frontend
+COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm ci --no-audit --no-fund
-COPY src/ProjectHub.Api/ClientApp ./
-# Vite builds into ../wwwroot via vite.config.js. Mirror that here.
-RUN npm run build && ls -la ../wwwroot
+COPY frontend ./
+# vite.config.js writes to ../backend/ProjectHub.Api/wwwroot. Override here so
+# the build output stays inside the frontend tree and can be COPY'd in stage 2.
+RUN npx vite build --outDir dist --emptyOutDir
 
-# ---------- Stage 2: restore + build + publish the .NET API ----------
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS dotnet-build
+# ---------- Stage 2: restore + build + publish the .NET backend ----------
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS backend-build
 WORKDIR /src
 
-# Copy the project files first so restore can be cached separately from sources.
+# Copy project files first so restore can be cached separately from sources.
 COPY ProjectHub.slnx ./
-COPY src/ProjectHub.Domain/ProjectHub.Domain.csproj src/ProjectHub.Domain/
-COPY src/ProjectHub.Services/ProjectHub.Services.csproj src/ProjectHub.Services/
-COPY src/ProjectHub.Persistence/ProjectHub.Persistence.csproj src/ProjectHub.Persistence/
-COPY src/ProjectHub.Api/ProjectHub.Api.csproj src/ProjectHub.Api/
+COPY backend/ProjectHub.Domain/ProjectHub.Domain.csproj backend/ProjectHub.Domain/
+COPY backend/ProjectHub.Services/ProjectHub.Services.csproj backend/ProjectHub.Services/
+COPY backend/ProjectHub.Persistence/ProjectHub.Persistence.csproj backend/ProjectHub.Persistence/
+COPY backend/ProjectHub.Api/ProjectHub.Api.csproj backend/ProjectHub.Api/
 
-RUN dotnet restore src/ProjectHub.Api/ProjectHub.Api.csproj
+RUN dotnet restore backend/ProjectHub.Api/ProjectHub.Api.csproj
 
-# Now copy the rest of the sources (excluding ClientApp - it comes from stage 1).
-COPY src/ProjectHub.Domain src/ProjectHub.Domain
-COPY src/ProjectHub.Services src/ProjectHub.Services
-COPY src/ProjectHub.Persistence src/ProjectHub.Persistence
-COPY src/ProjectHub.Api src/ProjectHub.Api
-# Drop any local ClientApp/wwwroot - we rebuild both inside the image.
-RUN rm -rf src/ProjectHub.Api/ClientApp src/ProjectHub.Api/wwwroot
-COPY --from=client-build /src/wwwroot src/ProjectHub.Api/wwwroot
+# Now copy the rest of the .NET sources.
+COPY backend/ProjectHub.Domain backend/ProjectHub.Domain
+COPY backend/ProjectHub.Services backend/ProjectHub.Services
+COPY backend/ProjectHub.Persistence backend/ProjectHub.Persistence
+COPY backend/ProjectHub.Api backend/ProjectHub.Api
+# Drop any local wwwroot - we copy the freshly built one from stage 1.
+RUN rm -rf backend/ProjectHub.Api/wwwroot
+COPY --from=frontend-build /src/frontend/dist backend/ProjectHub.Api/wwwroot
 
-# Disable the npm-build target during dotnet publish: there's no Node in this stage,
+# Skip the npm-build target during dotnet publish: there's no Node in this stage,
 # and the SPA assets are already in wwwroot.
-RUN dotnet publish src/ProjectHub.Api/ProjectHub.Api.csproj \
+RUN dotnet publish backend/ProjectHub.Api/ProjectHub.Api.csproj \
     -c Release \
     -o /app/publish \
     /p:SkipClientBuild=true \
@@ -50,7 +51,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=dotnet-build /app/publish .
+COPY --from=backend-build /app/publish .
 
 ENV ASPNETCORE_ENVIRONMENT=Production \
     ASPNETCORE_URLS=http://+:5090 \

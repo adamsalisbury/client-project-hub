@@ -5,7 +5,7 @@ export default defineConfig({
     plugins: [react()],
     base: '/',
     build: {
-        outDir: '../wwwroot',
+        outDir: '../backend/ProjectHub.Api/wwwroot',
         emptyOutDir: true,
         rollupOptions: {
             output: {
